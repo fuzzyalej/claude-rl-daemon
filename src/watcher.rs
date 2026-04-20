@@ -84,14 +84,14 @@ pub async fn run() -> anyhow::Result<()> {
 
 async fn handle_change(
     path: PathBuf,
-    claude_dir: &PathBuf,
+    claude_dir: &std::path::Path,
     scheduler: Arc<Mutex<Scheduler>>,
     offsets: Arc<Mutex<HashMap<PathBuf, u64>>>,
     watch_tx: mpsc::Sender<PathBuf>,
 ) {
     // New session PID file → queue its JSONL for watching
     if path.starts_with(claude_dir.join("sessions"))
-        && path.extension().map_or(false, |e| e == "json")
+        && path.extension().is_some_and(|e| e == "json")
     {
         if let Ok(content) = std::fs::read_to_string(&path) {
             if let Ok(entry) = serde_json::from_str::<SessionEntry>(&content) {
@@ -103,7 +103,7 @@ async fn handle_change(
     }
 
     // JSONL changed → tail new lines and check for rate limit
-    if path.extension().map_or(false, |e| e == "jsonl") {
+    if path.extension().is_some_and(|e| e == "jsonl") {
         let new_lines = read_new_lines(&path, Arc::clone(&offsets)).await;
         for line in new_lines {
             if let Some(event) = detect_rate_limit(&line) {
@@ -117,14 +117,22 @@ async fn handle_change(
                         let now = chrono::Utc::now();
                         let diff = ev.reset_at.signed_duration_since(now);
                         let delay = Duration::from_secs(diff.num_seconds().max(0) as u64);
-                        info!(session_id = ev.session_id, delay_secs = delay.as_secs(), "waiting to resume");
+                        info!(
+                            session_id = ev.session_id,
+                            delay_secs = delay.as_secs(),
+                            "waiting to resume"
+                        );
                         sleep(delay).await;
                         let cwd = ev.cwd.unwrap_or_else(|| PathBuf::from("."));
                         match spawn_resume(&ev.session_id, &cwd) {
                             Ok(tmux_name) => {
                                 let mut s = sched_clone.lock().await;
                                 s.mark_completed(&ev.session_id);
-                                info!(session_id = ev.session_id, tmux_session = tmux_name, "resume spawned");
+                                info!(
+                                    session_id = ev.session_id,
+                                    tmux_session = tmux_name,
+                                    "resume spawned"
+                                );
                             }
                             Err(e) => {
                                 error!(session_id = ev.session_id, error = %e, "failed to spawn resume")
@@ -137,10 +145,7 @@ async fn handle_change(
     }
 }
 
-async fn read_new_lines(
-    path: &PathBuf,
-    offsets: Arc<Mutex<HashMap<PathBuf, u64>>>,
-) -> Vec<String> {
+async fn read_new_lines(path: &PathBuf, offsets: Arc<Mutex<HashMap<PathBuf, u64>>>) -> Vec<String> {
     let mut off = offsets.lock().await;
     let current_offset = *off.get(path).unwrap_or(&0);
 
@@ -163,7 +168,7 @@ async fn read_new_lines(
     buf.lines().map(String::from).collect()
 }
 
-fn discover_active_jsonls(claude_dir: &PathBuf) -> Vec<PathBuf> {
+fn discover_active_jsonls(claude_dir: &std::path::Path) -> Vec<PathBuf> {
     let sessions_dir = claude_dir.join("sessions");
     let mut paths = vec![];
 
@@ -172,7 +177,7 @@ fn discover_active_jsonls(claude_dir: &PathBuf) -> Vec<PathBuf> {
     };
     for entry in entries.flatten() {
         let p = entry.path();
-        if p.extension().map_or(false, |e| e == "json") {
+        if p.extension().is_some_and(|e| e == "json") {
             if let Ok(content) = std::fs::read_to_string(&p) {
                 if let Ok(session) = serde_json::from_str::<SessionEntry>(&content) {
                     let jsonl = crate::session::jsonl_path(&session);

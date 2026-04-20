@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::process::Command;
 
 use tracing::{error, info};
@@ -8,7 +7,7 @@ pub fn tmux_session_name(session_id: &str) -> String {
     format!("claude-rl-{prefix}")
 }
 
-pub fn build_tmux_args(tmux_name: &str, cwd: &PathBuf, session_id: &str) -> Vec<String> {
+pub fn build_tmux_args(tmux_name: &str, cwd: &std::path::Path, session_id: &str) -> Vec<String> {
     vec![
         "new-session".into(),
         "-d".into(),
@@ -20,7 +19,7 @@ pub fn build_tmux_args(tmux_name: &str, cwd: &PathBuf, session_id: &str) -> Vec<
     ]
 }
 
-pub fn spawn_resume(session_id: &str, cwd: &PathBuf) -> anyhow::Result<String> {
+pub fn spawn_resume(session_id: &str, cwd: &std::path::Path) -> anyhow::Result<String> {
     let tmux_name = tmux_session_name(session_id);
     let args = build_tmux_args(&tmux_name, cwd, session_id);
 

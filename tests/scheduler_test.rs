@@ -38,7 +38,10 @@ async fn persists_and_reloads_state() {
 
     {
         let mut sched = Scheduler::new(state_path.clone());
-        sched.try_schedule(make_event("session-3", 600)).await.unwrap();
+        sched
+            .try_schedule(make_event("session-3", 600))
+            .await
+            .unwrap();
     }
 
     let sched2 = Scheduler::new(state_path);

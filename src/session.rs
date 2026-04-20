@@ -57,7 +57,7 @@ pub struct MessageMeta {
 
 /// Converts an absolute cwd path to the Claude project directory key.
 /// "/Users/aan/Code/oje" → "-Users-aan-Code-oje"
-pub fn cwd_to_project_key(cwd: &PathBuf) -> String {
+pub fn cwd_to_project_key(cwd: &std::path::Path) -> String {
     cwd.to_string_lossy().replace('/', "-")
 }
 

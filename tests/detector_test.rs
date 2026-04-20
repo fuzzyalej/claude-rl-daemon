@@ -37,5 +37,8 @@ fn falls_back_to_default_wait_when_no_timestamp() {
     let line = r#"{"type":"system","content":"quota exhausted","sessionId":"s2","timestamp":"2026-04-20T14:00:00Z","uuid":"u5","cwd":"/tmp"}"#;
     let event = detect_rate_limit(line).unwrap();
     let diff = event.reset_at.timestamp() - chrono::Utc::now().timestamp();
-    assert!(diff > 200 && diff < 400, "Expected ~5 min default, got {diff}s");
+    assert!(
+        diff > 200 && diff < 400,
+        "Expected ~5 min default, got {diff}s"
+    );
 }

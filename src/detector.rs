@@ -30,15 +30,12 @@ fn rate_limit_re() -> &'static Regex {
 }
 
 fn iso_timestamp_re() -> &'static Regex {
-    ISO_TIMESTAMP_RE.get_or_init(|| {
-        Regex::new(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)").unwrap()
-    })
+    ISO_TIMESTAMP_RE
+        .get_or_init(|| Regex::new(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)").unwrap())
 }
 
 fn retry_after_secs_re() -> &'static Regex {
-    RETRY_AFTER_SECS_RE.get_or_init(|| {
-        Regex::new(r"(?i)retry[\s_\-]?after[:\s]+(\d+)").unwrap()
-    })
+    RETRY_AFTER_SECS_RE.get_or_init(|| Regex::new(r"(?i)retry[\s_\-]?after[:\s]+(\d+)").unwrap())
 }
 
 const DEFAULT_WAIT_SECS: i64 = 300;
@@ -60,7 +57,11 @@ pub fn detect_rate_limit(jsonl_line: &str) -> Option<RateLimitEvent> {
 
     debug!(session_id, ?reset_at, "rate limit detected");
 
-    Some(RateLimitEvent { session_id, reset_at, cwd })
+    Some(RateLimitEvent {
+        session_id,
+        reset_at,
+        cwd,
+    })
 }
 
 fn extract_session_id(v: &Value) -> Option<String> {

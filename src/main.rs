@@ -9,7 +9,10 @@ async fn main() -> anyhow::Result<()> {
         .json()
         .init();
 
-    info!(version = env!("CARGO_PKG_VERSION"), "claude-rl-daemon starting");
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        "claude-rl-daemon starting"
+    );
 
     tokio::select! {
         result = claude_rl_daemon::watcher::run() => result,
