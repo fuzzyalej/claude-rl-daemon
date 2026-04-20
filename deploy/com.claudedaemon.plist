@@ -19,8 +19,8 @@
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/claude-rl-daemon.log</string>
+    <string>/Users/aan/.claude-daemon/daemon.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/claude-rl-daemon.err</string>
+    <string>/Users/aan/.claude-daemon/daemon.err</string>
 </dict>
 </plist>

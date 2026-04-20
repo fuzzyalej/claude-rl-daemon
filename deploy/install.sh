@@ -13,6 +13,9 @@ echo "Installing binary to $INSTALL_PATH"
 cp "$BINARY" "$INSTALL_PATH"
 chmod +x "$INSTALL_PATH"
 
+echo "Creating log directory..."
+mkdir -p "$HOME/.claude-daemon"
+
 echo "Installing launchd plist..."
 mkdir -p "$HOME/Library/LaunchAgents"
 cp "$PLIST_SRC" "$PLIST_DST"

@@ -1,0 +1,105 @@
+# claude-rl-daemon
+
+A background Rust daemon that watches Claude Code sessions and automatically resumes them in a detached tmux window after an API rate limit resets.
+
+## How it works
+
+1. Watches `~/.claude/sessions/` for active Claude Code processes
+2. Tails each session's JSONL file for rate-limit error messages
+3. Extracts the reset timestamp and waits (plus a 15-second buffer)
+4. Spawns `claude --resume <uuid>` in a detached tmux session
+
+## Install
+
+```bash
+bash deploy/install.sh
+```
+
+Builds a release binary, installs to `/usr/local/bin/claude-rl-daemon`, and registers a launchd agent that starts at login and restarts on crash.
+
+## Logs
+
+Logs are written as JSON to `~/.claude-daemon/`:
+
+| File | Contents |
+|------|----------|
+| `~/.claude-daemon/daemon.log` | Info/debug output (rate limits detected, resumes scheduled) |
+| `~/.claude-daemon/daemon.err` | Errors (tmux failures, file access issues) |
+| `~/.claude-daemon/state.json` | Pending/completed resume state (human-readable, safe to delete) |
+
+### Viewing logs
+
+```bash
+# Live structured log stream
+tail -f ~/.claude-daemon/daemon.log | jq .
+
+# Show only rate-limit and resume events
+tail -f ~/.claude-daemon/daemon.log | jq 'select(.fields.message | test("rate limit|resume|scheduled"))'
+
+# Check daemon status (launchd)
+launchctl list | grep claudedaemon
+```
+
+### Log verbosity
+
+Set `RUST_LOG` in the plist (default: `info`). Options: `error`, `warn`, `info`, `debug`.
+
+```bash
+# Edit the plist before installing
+nano deploy/com.claudedaemon.plist
+# Change the RUST_LOG value, then re-run: bash deploy/install.sh
+```
+
+## Attaching to a resumed session
+
+When the daemon resumes a session it logs the tmux session name:
+
+```json
+{"level":"INFO","fields":{"message":"resume spawned","tmux_session":"claude-rl-fc456884"}}
+```
+
+Attach with:
+
+```bash
+tmux ls | grep claude-rl          # list all daemon-spawned sessions
+tmux attach -t claude-rl-fc456884 # attach to a specific one
+```
+
+## Manage the daemon
+
+```bash
+# Stop
+launchctl unload ~/Library/LaunchAgents/com.claudedaemon.plist
+
+# Start
+launchctl load ~/Library/LaunchAgents/com.claudedaemon.plist
+
+# Uninstall
+launchctl unload ~/Library/LaunchAgents/com.claudedaemon.plist
+rm ~/Library/LaunchAgents/com.claudedaemon.plist
+rm /usr/local/bin/claude-rl-daemon
+```
+
+## Run manually (no launchd)
+
+```bash
+RUST_LOG=info ./target/release/claude-rl-daemon
+```
+
+Logs go to stdout only when running manually.
+
+## Tuning rate-limit detection
+
+After hitting a real rate limit, run the forensics scripts to capture the exact JSONL format:
+
+```bash
+bash scripts/phase1-before.sh   # snapshot before
+# ... trigger rate limit ...
+bash scripts/phase1-after.sh    # capture the diff
+```
+
+Then update `RATE_LIMIT_RE` in `src/detector.rs` with the exact strings Claude Code emits and rebuild.
+
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for a full pipeline description.
