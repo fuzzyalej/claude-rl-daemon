@@ -1,4 +1,6 @@
-/target
-docs/plans/
+.DS_Store
 .env
 *.log
+
+/target
+docs/plans/
