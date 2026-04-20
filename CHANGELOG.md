@@ -7,6 +7,28 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0] — 2026-04-20
+
+### Added
+- `cdaemon` CLI management tool — separate binary in the same workspace
+- `cdaemon status` — daemon health + pending sessions summary table
+- `cdaemon sessions` — full session history with status column
+- `cdaemon logs [--follow] [-n N]` — tail daemon.log
+- `cdaemon install` — build + install binaries + configure launchd (replaces install.sh for day-to-day use)
+- `cdaemon start` / `cdaemon stop` / `cdaemon uninstall` — service lifecycle
+- `cdaemon hook <uuid>` — smart TTY attach: spawn into tmux if terminal, print command if not
+- `cdaemon resume <uuid>` — manual immediate resume for any pending session
+- `cdaemon cancel <uuid>` — remove session from pending resumes
+- `cdaemon doctor` — prerequisite checklist with per-item fix hints
+- `cdaemon completions <bash|zsh|fish>` — shell completion generation
+- Rich table output via `tabled`, colored status indicators via `colored`
+- UUID prefix matching (8-char prefix) for all session commands
+
+### Changed
+- `DaemonState` (formerly private `State`) is now public in `scheduler.rs`
+
+---
+
 ## [0.1.0] — 2026-04-20
 
 ### Added

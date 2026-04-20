@@ -17,6 +17,38 @@ bash deploy/install.sh
 
 Builds a release binary, installs to `/usr/local/bin/claude-rl-daemon`, and registers a launchd agent that starts at login and restarts on crash.
 
+## Management CLI (cdaemon)
+
+`cdaemon` is the management interface for the daemon.
+
+### Quick reference
+
+| Command | Description |
+|---------|-------------|
+| `cdaemon status` | Daemon health + pending sessions |
+| `cdaemon sessions` | Full session history |
+| `cdaemon logs` | View last 50 log lines |
+| `cdaemon logs --follow` | Tail live log output |
+| `cdaemon hook <uuid>` | Attach to a session's tmux window |
+| `cdaemon resume <uuid>` | Manually trigger a resume now |
+| `cdaemon cancel <uuid>` | Cancel a pending resume |
+| `cdaemon doctor` | Check all prerequisites |
+| `cdaemon install` | Build + install daemon + configure launchd |
+| `cdaemon start` / `cdaemon stop` | Start or stop the daemon |
+| `cdaemon completions zsh` | Print zsh completion script |
+
+Commands that take a UUID accept either the full UUID or the first 8 characters.
+
+### Shell completions
+
+```bash
+# zsh
+cdaemon completions zsh > ~/.zsh/completions/_cdaemon
+
+# bash
+cdaemon completions bash >> ~/.bashrc
+```
+
 ## Logs
 
 Logs are written as JSON to `~/.claude-daemon/`:
