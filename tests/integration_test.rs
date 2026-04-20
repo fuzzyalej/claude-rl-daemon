@@ -8,7 +8,7 @@ async fn full_pipeline_deduplicates() {
     let dir = tempdir().unwrap();
     let mut sched = Scheduler::new(dir.path().join("state.json"));
 
-    let line = r#"{"type":"system","content":"rate limit exceeded, please wait","sessionId":"full-test-session","timestamp":"2026-04-20T14:30:00Z","uuid":"u1","cwd":"/tmp"}"#;
+    let line = r#"{"type":"assistant","error":"rate_limit","isApiErrorMessage":true,"apiErrorStatus":429,"sessionId":"full-test-session","cwd":"/tmp","message":{"content":[{"type":"text","text":"You're out of extra usage \u00b7 resets 11:59pm (UTC)"}]}}"#;
 
     let event = detect_rate_limit(line).unwrap();
     assert!(sched.try_schedule(event.clone()).await.unwrap());
