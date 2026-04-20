@@ -7,7 +7,7 @@
     <string>com.claudedaemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/claude-rl-daemon</string>
+        <string>__INSTALL_PATH__</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
@@ -19,8 +19,8 @@
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/aan/.claude-daemon/daemon.log</string>
+    <string>__HOME__/.claude-daemon/daemon.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/aan/.claude-daemon/daemon.err</string>
+    <string>__HOME__/.claude-daemon/daemon.err</string>
 </dict>
 </plist>
