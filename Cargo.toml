@@ -3,6 +3,10 @@ name = "claude-rl-daemon"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "claude_rl_daemon"
+path = "src/lib.rs"
+
 [[bin]]
 name = "claude-rl-daemon"
 path = "src/main.rs"

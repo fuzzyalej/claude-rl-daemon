@@ -1,9 +1,3 @@
-pub mod detector;
-pub mod scheduler;
-pub mod session;
-pub mod tmux;
-pub mod watcher;
-
 use tracing::info;
 
 #[tokio::main]
@@ -18,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
     info!(version = env!("CARGO_PKG_VERSION"), "claude-rl-daemon starting");
 
     tokio::select! {
-        result = watcher::run() => result,
+        result = claude_rl_daemon::watcher::run() => result,
         _ = tokio::signal::ctrl_c() => {
             info!("received SIGINT, shutting down");
             Ok(())
