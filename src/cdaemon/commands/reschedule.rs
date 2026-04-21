@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use humantime;
-use std::time::Duration;
 
 use crate::state;
 
@@ -56,4 +55,39 @@ pub fn run(uuid_or_prefix: &str, time_str: &str) -> anyhow::Result<()> {
     println!("{} rescheduled pending resume for {} to {}", "✓".green(), &session_id[..8], new_dt.to_rfc3339());
     println!("Note: the daemon must be restarted to pick up this change immediately if it\'s already running.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_time;
+    use chrono::Utc;
+
+    #[test]
+    fn parse_iso8601() {
+        let dt = parse_time("2026-04-21T12:00:00Z").expect("parse rfc3339");
+        assert_eq!(dt.to_rfc3339(), "2026-04-21T12:00:00+00:00");
+    }
+
+    #[test]
+    fn parse_relative_plus() {
+        let dt = parse_time("+2s").expect("parse +2s");
+        assert!((dt - Utc::now()).num_seconds().abs() <= 5);
+    }
+
+    #[test]
+    fn parse_in_minutes() {
+        let dt = parse_time("in 1m").expect("parse in 1m");
+        assert!((dt - Utc::now()).num_seconds() >= 50);
+    }
+
+    #[test]
+    fn parse_epoch() {
+        let dt = parse_time("1713638400").expect("parse epoch");
+        assert_eq!(dt.timestamp(), 1713638400);
+    }
+
+    #[test]
+    fn parse_invalid() {
+        assert!(parse_time("not a time").is_err());
+    }
 }

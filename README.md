@@ -31,6 +31,7 @@ Builds a release binary, installs to `/usr/local/bin/claude-rl-daemon`, and regi
 | `cdaemon logs --follow` | Tail live log output |
 | `cdaemon hook <uuid>` | Attach to a session's tmux window |
 | `cdaemon resume <uuid>` | Manually trigger a resume now |
+| `cdaemon reschedule <uuid> <time>` | Reschedule a pending resume (ISO8601 or relative, e.g. "+2h", "in 10m") |
 | `cdaemon cancel <uuid>` | Cancel a pending resume |
 | `cdaemon doctor` | Check all prerequisites |
 | `cdaemon install` | Build + install daemon + configure launchd |
