@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
 use humantime;
 
@@ -52,7 +52,7 @@ pub fn run(uuid_or_prefix: &str, time_str: &str) -> anyhow::Result<()> {
 
     state::save_state(&daemon_state)?;
 
-    println!("{} rescheduled pending resume for {} to {}", "✓".green(), &session_id[..8], new_dt.to_rfc3339());
+    println!("{} rescheduled pending resume for {} to {}", "✓".green(), &session_id[..8], new_dt.with_timezone(&Local).to_rfc3339());
     println!("Note: the daemon must be restarted to pick up this change immediately if it\'s already running.");
     Ok(())
 }
