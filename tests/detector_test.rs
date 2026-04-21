@@ -74,3 +74,22 @@ fn falls_back_to_default_wait_when_no_reset_time() {
         "Expected ~5 min default, got {diff}s"
     );
 }
+
+#[test]
+fn parses_iso_timestamp_in_raw_line() {
+    // Include an ISO timestamp in the raw line well in the future
+    let future = (chrono::Utc::now() + chrono::Duration::seconds(3600)).to_rfc3339();
+    let line = format!(r#"{{"error":"rate_limit","sessionId":"iso-1","message":{{"content":[{{"type":"text","text":"ok"}}]}},"timestamp":"{}"}}"#, future);
+    let event = detect_rate_limit(&line).unwrap();
+    assert_eq!(event.session_id, "iso-1");
+    assert!(event.reset_at > chrono::Utc::now());
+}
+
+#[test]
+fn parses_retry_after_seconds_in_raw_line() {
+    // Include 'retry after 10' in the raw text
+    let line = r#"{"error":"rate_limit","sessionId":"retry-1","message":{"content":[{"type":"text","text":"please retry after 10"}]}}"#;
+    let event = detect_rate_limit(line).unwrap();
+    let diff = event.reset_at.timestamp() - chrono::Utc::now().timestamp();
+    assert!(diff >= 10);
+}

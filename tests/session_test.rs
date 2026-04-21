@@ -1,4 +1,4 @@
-use claude_rl_daemon::session::{cwd_to_project_key, SessionEntry, SessionMessage};
+use claude_rl_daemon::session::{cwd_to_project_key, jsonl_path, SessionEntry, SessionMessage};
 use std::path::PathBuf;
 
 #[test]
@@ -28,4 +28,21 @@ fn parses_system_message() {
 fn cwd_to_project_key_converts_correctly() {
     let cwd = PathBuf::from("/Users/aan/Code/oje");
     assert_eq!(cwd_to_project_key(&cwd), "-Users-aan-Code-oje");
+}
+
+#[test]
+fn jsonl_path_contains_session_id_and_ext() {
+    let entry = SessionEntry {
+        pid: 1,
+        session_id: "session-xyz".to_string(),
+        cwd: PathBuf::from("/Users/aan/Code/oje"),
+        started_at: 0,
+        version: "v".to_string(),
+        kind: "k".to_string(),
+        entrypoint: "e".to_string(),
+    };
+
+    let p = jsonl_path(&entry);
+    assert!(p.extension().is_some() && p.extension().unwrap() == "jsonl");
+    assert!(p.to_string_lossy().contains(&entry.session_id));
 }

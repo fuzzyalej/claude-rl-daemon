@@ -176,3 +176,39 @@ fn parse_ampm_time(s: &str) -> Option<NaiveTime> {
 
     NaiveTime::from_hms_opt(hour24, minute, 0)
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Timelike;
+    use chrono::Utc;
+
+    #[test]
+    fn parse_ampm_time_various() {
+        let t = parse_ampm_time("9pm").expect("should parse 9pm");
+        assert_eq!(t.hour(), 21);
+
+        let t = parse_ampm_time("10:30am").expect("should parse 10:30am");
+        assert_eq!(t.hour(), 10);
+        assert_eq!(t.minute(), 30);
+
+        let t = parse_ampm_time("12am").expect("should parse 12am");
+        assert_eq!(t.hour(), 0);
+
+        let t = parse_ampm_time("12pm").expect("should parse 12pm");
+        assert_eq!(t.hour(), 12);
+
+        let t = parse_ampm_time("21:00").expect("should parse 24h");
+        assert_eq!(t.hour(), 21);
+    }
+
+    #[test]
+    fn parse_resets_at_text_future() {
+        // Use a time that is likely later today in UTC to ensure it's parsed
+        let text = "You're out of extra usage · resets 11:59pm (UTC)";
+        let dt = parse_resets_at_text(text).expect("should parse resets text");
+        assert!(dt > Utc::now());
+    }
+}
+

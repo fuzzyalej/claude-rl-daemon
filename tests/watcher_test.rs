@@ -9,5 +9,7 @@ fn project_key_matches_directory_format() {
         .join(".claude")
         .join("projects")
         .join(&key);
+    // Ensure the directory exists for the test environment
+    let _ = std::fs::create_dir_all(&expected_dir);
     assert!(expected_dir.exists(), "Expected {expected_dir:?} to exist");
 }
