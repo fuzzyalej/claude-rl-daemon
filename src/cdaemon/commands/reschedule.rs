@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local, Utc, TimeZone};
 use colored::Colorize;
 use humantime;
 
@@ -30,9 +30,11 @@ fn parse_time(input: &str) -> anyhow::Result<DateTime<Utc>> {
 
     // Try parse as unix epoch seconds
     if let Ok(secs) = trimmed.parse::<i64>() {
-        let naive = chrono::NaiveDateTime::from_timestamp_opt(secs, 0)
-            .ok_or_else(|| anyhow::anyhow!("invalid epoch seconds: {}", secs))?;
-        return Ok(DateTime::<Utc>::from_utc(naive, Utc));
+        if let Some(dt) = Utc.timestamp_opt(secs, 0).single() {
+            return Ok(dt);
+        } else {
+            return Err(anyhow::anyhow!("invalid epoch seconds: {}", secs));
+        }
     }
 
     Err(anyhow::anyhow!("failed to parse time: {}", input))
