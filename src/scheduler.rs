@@ -68,6 +68,7 @@ impl Scheduler {
         self.state.save_to_path(&self.state_path)?;
 
         info!(session_id = id, reset_at = %event.reset_at, "scheduled resume");
+        let _ = crate::notify::notify("Resume scheduled", &format!("Session {} scheduled at {}", id, event.reset_at));
         Ok(true)
     }
 

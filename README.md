@@ -136,3 +136,7 @@ Then update `RATE_LIMIT_RE` in `src/detector.rs` with the exact strings Claude C
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for a full pipeline description.
+
+## Notifications
+
+The daemon emits native notifications on macOS when a resume is scheduled and when a session is resumed (or fails to resume). This uses the system "osascript" command so there are no extra dependencies. On non-macOS platforms notifications are a no-op and are logged at info level.

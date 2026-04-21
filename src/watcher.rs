@@ -133,8 +133,10 @@ async fn handle_change(
                                     tmux_session = tmux_name,
                                     "resume spawned"
                                 );
+                                let _ = crate::notify::notify("Resume spawned", &format!("Session {} resumed in tmux {}", ev.session_id, tmux_name));
                             }
                             Err(e) => {
+                                let _ = crate::notify::notify("Resume failed", &format!("Session {} failed to resume: {}", ev.session_id, e));
                                 error!(session_id = ev.session_id, error = %e, "failed to spawn resume")
                             }
                         }
@@ -221,8 +223,10 @@ async fn restore_pending_resumes(scheduler: Arc<Mutex<Scheduler>>) {
                         tmux_session = tmux_name,
                         "restored resume spawned"
                     );
+                    let _ = crate::notify::notify("Resume spawned", &format!("Session {} resumed in tmux {}", resume.session_id, tmux_name));
                 }
                 Err(e) => {
+                    let _ = crate::notify::notify("Resume failed", &format!("Session {} failed to resume: {}", resume.session_id, e));
                     error!(session_id = resume.session_id, error = %e, "restored resume failed")
                 }
             }
