@@ -1,3 +1,4 @@
-- create CLI to easily install, start service, stop service, list sessions, hook to a session, etc
 - hook to mac notifications to show what's going on
 - hook to iterm internals to easily navigate, switch and open tmux sessions?
+- add command to reschedule
+- use same timezone as computer

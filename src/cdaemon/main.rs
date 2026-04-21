@@ -46,6 +46,13 @@ enum Cmd {
         /// Session UUID or 8-char prefix
         uuid: String,
     },
+    /// Reschedule a pending session's resume time
+    Reschedule {
+        /// Session UUID or 8-char prefix
+        uuid: String,
+        /// New resume time (ISO8601 or relative, e.g. "+2h", "in 10m")
+        time: String,
+    },
     /// Cancel a pending session resume
     Cancel {
         /// Session UUID or 8-char prefix
@@ -72,6 +79,7 @@ fn main() -> Result<()> {
         Cmd::Uninstall => commands::service::uninstall(),
         Cmd::Hook { uuid } => commands::hook::run(&uuid),
         Cmd::Resume { uuid } => commands::resume::run(&uuid),
+        Cmd::Reschedule { uuid, time } => commands::reschedule::run(&uuid, &time),
         Cmd::Cancel { uuid } => commands::cancel::run(&uuid),
         Cmd::Doctor => commands::doctor::run(),
         Cmd::Completions { shell } => commands::completions::run(shell),

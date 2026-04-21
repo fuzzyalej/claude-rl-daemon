@@ -4,6 +4,7 @@ pub mod doctor;
 pub mod hook;
 pub mod logs;
 pub mod resume;
+pub mod reschedule;
 pub mod service;
 pub mod sessions;
 pub mod status;
