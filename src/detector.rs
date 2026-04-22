@@ -205,9 +205,78 @@ mod tests {
 
     #[test]
     fn parse_resets_at_text_future() {
-        // Use a time that is likely later today in UTC to ensure it's parsed
         let text = "You're out of extra usage · resets 11:59pm (UTC)";
         let dt = parse_resets_at_text(text).expect("should parse resets text");
+        assert!(dt > Utc::now());
+    }
+
+    #[test]
+    fn detect_rate_limit_empty_line_returns_none() {
+        assert!(detect_rate_limit("").is_none());
+        assert!(detect_rate_limit("   ").is_none());
+    }
+
+    #[test]
+    fn detect_rate_limit_non_rate_limit_json_returns_none() {
+        let line = r#"{"type":"user","sessionId":"s1","message":{"content":[]}}"#;
+        assert!(detect_rate_limit(line).is_none());
+    }
+
+    #[test]
+    fn detect_rate_limit_iso_timestamp_fallback() {
+        // No "resets Xpm" text — only a future ISO timestamp with Z suffix (required for regex + parse).
+        let future = Utc::now() + chrono::Duration::seconds(3600);
+        // to_rfc3339() produces "+00:00" which the regex doesn't fully capture; use Z explicitly.
+        let iso = future.format("%Y-%m-%dT%H:%M:%SZ");
+        let line = format!(
+            r#"{{"type":"assistant","error":"rate_limit","apiErrorStatus":429,"sessionId":"iso-test","cwd":"/tmp","message":{{"content":[{{"type":"text","text":"retry at {iso}"}}]}}}}"#
+        );
+        let event = detect_rate_limit(&line).expect("should detect rate limit");
+        assert_eq!(event.session_id, "iso-test");
+        assert!(event.reset_at > Utc::now());
+    }
+
+    #[test]
+    fn detect_rate_limit_retry_after_fallback() {
+        let line = r#"{"type":"assistant","error":"rate_limit","apiErrorStatus":429,"sessionId":"retry-test","message":{"content":[{"type":"text","text":"Retry-After: 120"}]}}"#;
+        let event = detect_rate_limit(line).expect("should detect");
+        assert!(event.reset_at > Utc::now());
+    }
+
+    #[test]
+    fn detect_rate_limit_default_fallback_when_no_time_hint() {
+        let line = r#"{"type":"assistant","error":"rate_limit","apiErrorStatus":429,"sessionId":"default-test","message":{"content":[{"type":"text","text":"You hit a rate limit."}]}}"#;
+        let event = detect_rate_limit(line).expect("should detect");
+        assert!(event.reset_at > Utc::now());
+    }
+
+    #[test]
+    fn detect_rate_limit_is_api_error_message_flag() {
+        let line = r#"{"type":"assistant","isApiErrorMessage":true,"sessionId":"flag-test","message":{"content":[{"type":"text","text":"some error"}]}}"#;
+        let event = detect_rate_limit(line).expect("isApiErrorMessage=true should trigger detection");
+        assert_eq!(event.session_id, "flag-test");
+    }
+
+    #[test]
+    fn detect_rate_limit_captures_cwd() {
+        let line = r#"{"type":"assistant","error":"rate_limit","apiErrorStatus":429,"sessionId":"cwd-test","cwd":"/home/user/project","message":{"content":[{"type":"text","text":"rate limited"}]}}"#;
+        let event = detect_rate_limit(line).unwrap();
+        assert_eq!(event.cwd.as_ref().unwrap().to_str().unwrap(), "/home/user/project");
+    }
+
+    #[test]
+    fn parse_ampm_time_invalid_returns_none() {
+        assert!(parse_ampm_time("99pm").is_none());
+    }
+
+    #[test]
+    fn parse_resets_at_text_already_passed_schedules_tomorrow() {
+        // 12:00am (midnight) UTC is always in the past after it strikes midnight,
+        // which is true for any UTC time that isn't exactly 00:00.
+        // If somehow this runs at exactly midnight, the test still doesn't panic.
+        let text = "You're out of extra usage · resets 12:00am (UTC)";
+        let dt = parse_resets_at_text(text).expect("should parse resets text");
+        // Whether it's today (unlikely) or tomorrow, the result should be > now
         assert!(dt > Utc::now());
     }
 }

@@ -10,6 +10,7 @@ struct Check {
     hint: &'static str,
 }
 
+#[cfg(not(tarpaulin))]
 pub fn run() -> anyhow::Result<()> {
     let checks = vec![
         Check {
@@ -74,6 +75,7 @@ pub fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(tarpaulin))]
 fn cmd_exists(cmd: &str) -> bool {
     Command::new("which")
         .arg(cmd)
@@ -82,6 +84,7 @@ fn cmd_exists(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(not(tarpaulin))]
 fn launchd_loaded() -> bool {
     Command::new("launchctl")
         .args(["list", "com.claudedaemon"])

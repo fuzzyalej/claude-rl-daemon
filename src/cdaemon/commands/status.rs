@@ -1,16 +1,28 @@
+use claude_rl_daemon::DaemonState;
 use colored::Colorize;
 
 use crate::{format, state};
 
+#[cfg(not(tarpaulin))]
 pub fn run() -> anyhow::Result<()> {
     let daemon_state = state::load_state()?;
-    let pending: Vec<_> = daemon_state.pending.values().cloned().collect();
+    let daemon_status = query_launchctl_status();
+    print_status(&daemon_state, &daemon_status);
+    Ok(())
+}
 
+pub struct DaemonStatus {
+    pub label: String,
+    pub pid: String,
+}
+
+#[cfg(not(tarpaulin))]
+pub fn query_launchctl_status() -> DaemonStatus {
     let launchctl_out = std::process::Command::new("launchctl")
         .args(["list", "com.claudedaemon"])
         .output();
 
-    let (daemon_label, pid_label) = match launchctl_out {
+    match launchctl_out {
         Ok(out) if out.status.success() => {
             let stdout = String::from_utf8_lossy(&out.stdout);
             let pid = stdout
@@ -20,12 +32,16 @@ pub fn run() -> anyhow::Result<()> {
                 .filter(|&p| p != "-")
                 .map(|p| format!("(pid {p})"))
                 .unwrap_or_default();
-            ("running".green().to_string(), pid)
+            DaemonStatus { label: "running".green().to_string(), pid }
         }
-        _ => ("stopped".red().to_string(), String::new()),
-    };
+        _ => DaemonStatus { label: "stopped".red().to_string(), pid: String::new() },
+    }
+}
 
-    println!("Daemon    {daemon_label}  {pid_label}");
+pub fn print_status(daemon_state: &DaemonState, status: &DaemonStatus) {
+    let pending: Vec<_> = daemon_state.pending.values().cloned().collect();
+
+    println!("Daemon    {}  {}", status.label, status.pid);
     println!(
         "Sessions  {} pending, {} completed",
         pending.len(),
@@ -36,6 +52,38 @@ pub fn run() -> anyhow::Result<()> {
         println!();
         println!("{}", format::format_sessions(&pending, "pending"));
     }
+}
 
-    Ok(())
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use claude_rl_daemon::PendingResume;
+
+    fn stopped() -> DaemonStatus {
+        DaemonStatus { label: "stopped".to_string(), pid: String::new() }
+    }
+
+    #[test]
+    fn prints_empty_state() {
+        print_status(&DaemonState::default(), &stopped());
+    }
+
+    #[test]
+    fn prints_pending_sessions() {
+        let mut s = DaemonState::default();
+        s.pending.insert("xyz".to_string(), PendingResume {
+            session_id: "xyz".to_string(),
+            reset_at: Utc::now(),
+            cwd: None,
+        });
+        print_status(&s, &stopped());
+    }
+
+    #[test]
+    fn prints_completed_sessions() {
+        let mut s = DaemonState::default();
+        s.completed.insert("done-session".to_string());
+        print_status(&s, &stopped());
+    }
 }

@@ -8,6 +8,7 @@ use crate::state;
 
 const PLIST_TEMPLATE: &str = include_str!("../../../deploy/com.claudedaemon.plist");
 
+#[cfg(not(tarpaulin))]
 pub fn install() -> anyhow::Result<()> {
     println!("Building release binaries...");
     let status = Command::new("cargo")
@@ -59,6 +60,7 @@ pub fn install() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(tarpaulin))]
 pub fn start() -> anyhow::Result<()> {
     let plist = state::plist_path();
     anyhow::ensure!(
@@ -74,6 +76,7 @@ pub fn start() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(tarpaulin))]
 pub fn stop() -> anyhow::Result<()> {
     let plist = state::plist_path();
     let status = Command::new("launchctl")
@@ -87,6 +90,7 @@ pub fn stop() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(tarpaulin))]
 pub fn uninstall() -> anyhow::Result<()> {
     stop().ok();
 

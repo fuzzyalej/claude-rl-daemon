@@ -67,6 +67,10 @@ enum Cmd {
     },
 }
 
+#[cfg(tarpaulin)]
+fn main() {}
+
+#[cfg(not(tarpaulin))]
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {

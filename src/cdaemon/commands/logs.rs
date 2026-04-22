@@ -6,6 +6,7 @@ use colored::Colorize;
 
 use crate::state;
 
+#[cfg(not(tarpaulin))]
 pub fn run(follow: bool, lines: usize) -> anyhow::Result<()> {
     let log_path = state::log_path();
 

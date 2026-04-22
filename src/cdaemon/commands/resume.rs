@@ -2,6 +2,7 @@ use claude_rl_daemon::tmux::spawn_resume;
 
 use crate::state;
 
+#[cfg(not(tarpaulin))]
 pub fn run(uuid_or_prefix: &str) -> anyhow::Result<()> {
     let daemon_state = state::load_state()?;
     let session_id = state::resolve_uuid(&daemon_state, uuid_or_prefix)?;

@@ -2,57 +2,92 @@
 
 ## Detection pipeline
 
-1. `watcher.rs` uses `notify` (FSEvents on macOS) to watch:
-   - `~/.claude/sessions/` — for new session PID files (new `<pid>.json` → discover its JSONL)
-   - `~/.claude/projects/<project>/<uuid>.jsonl` — for new appended lines
-
-2. `detector.rs` scans new JSONL lines with compiled `OnceLock<Regex>` patterns.
-   Returns a `RateLimitEvent { session_id, reset_at, cwd }` or `None`.
-
-3. `scheduler.rs` deduplicates by `session_id` and persists pending resumes
-   to `~/.claude-daemon/state.json` so the daemon survives restarts.
-
-4. `tmux.rs` calls:
-   ```
-   tmux new-session -d -s claude-rl-<prefix> -c <cwd> "claude --resume <uuid>"
-   ```
-   Attach with: `tmux attach -t claude-rl-<prefix>`
-
-## Tuning rate-limit patterns
-
-After running `scripts/phase1-before.sh`, triggering a rate limit, then
-`scripts/phase1-after.sh`, update `RATE_LIMIT_RE` in `src/detector.rs`
-with the exact strings Claude Code emits.
-
-Current patterns cover:
-- `rate limit` / `rate-limit`
-- `too many requests`
-- `quota exceeded` / `quota exhausted`
-- `usage limit`
-- `overloaded`
-- `retry after`
-- HTTP `429`
-
-## Logs
-
-```bash
-RUST_LOG=debug ./target/release/claude-rl-daemon
+```
+FSEvents (notify)
+   └── watcher.rs
+         ├── sessions dir: new <pid>.json  → queue JSONL for watching
+         └── JSONL file changed           → read_new_lines() → detect_rate_limit()
+                                                                      │
+                                                               detector.rs
+                                                                      │
+                                                               RateLimitEvent
+                                                                      │
+                                                              scheduler.rs
+                                                          (deduplicate + persist)
+                                                                      │
+                                                            resume_after() (watcher.rs)
+                                                               sleep(delay)
+                                                                      │
+                                                               tmux.rs
+                                                        spawn_resume() → tmux new-session
 ```
 
-JSON-formatted log lines, readable with `jq`:
-```bash
-tail -f /tmp/claude-rl-daemon.log | jq .
-```
+## Module responsibilities
+
+### `watcher.rs`
+- `run()` — top-level async loop; watches FSEvents via `notify` crate
+- `handle_change()` — dispatches on file extension: `.json` (session PID) → queue JSONL; `.jsonl` → detect rate limits
+- `read_new_lines()` — incremental file read using a seek-offset map (tail-follow pattern)
+- `discover_active_jsonls()` — on startup, finds JSONL paths for already-open sessions
+- `resume_after()` — awaits `reset_at`, then calls `spawn_resume`; exposed as `pub` for testing
+
+### `detector.rs`
+- Parses raw JSONL lines with `OnceLock<Regex>` for zero-allocation hot path
+- Reset time extraction priority:
+  1. `"resets Xpm (Timezone)"` in message text (rolls forward to tomorrow if passed)
+  2. ISO8601 timestamp with `Z` suffix in the raw line
+  3. `Retry-After: N` seconds
+  4. Default fallback: 300s + 15s buffer
+
+### `scheduler.rs`
+- Deduplicates by `session_id` — ignores both pending and completed sessions
+- Persists `DaemonState` (HashMap + HashSet) to `~/.claude-daemon/state.json` on every change
+- On restart, `Scheduler::new()` reloads state and `restore_pending_resumes()` re-arms all timers
+
+### `tmux.rs`
+- `tmux_session_name()` — `claude-rl-<uuid_prefix_8chars>`
+- `build_tmux_args()` — pure function for testing without exec
+- `spawn_resume()` — runs `tmux new-session -d -s <name> -c <cwd> "claude --resume <uuid>"`
+
+### `notify.rs`
+- macOS: `osascript` for native notifications
+- Other platforms: log-only no-op
+
+### `cdaemon/`
+- `state.rs` — path helpers + `resolve_uuid()` (full UUID or 8-char prefix)
+- `format.rs` — pure formatting functions for table output
+- `commands/` — one module per CLI subcommand; business logic extracted to testable pure functions
+
+## Testability strategy
+
+System-interaction code (tmux, launchctl, osascript) is excluded from coverage via `#[cfg(not(tarpaulin))]`. These functions are compiled out when tarpaulin runs, and stubs are provided where necessary (e.g., `spawn_resume` returns a fake session name). This allows 97%+ line coverage without requiring real system tools in CI.
+
+## Rate-limit detection patterns
+
+Current patterns in `detector.rs` match:
+- `"error": "rate_limit"` field
+- `"apiErrorStatus": 429`
+- `"isApiErrorMessage": true`
+
+Reset time is parsed from the message text, ISO timestamps, or `Retry-After` headers.
 
 ## State file
 
 `~/.claude-daemon/state.json` — human-readable JSON, safe to delete to reset all pending resumes.
 
+## Logs
+
+```bash
+RUST_LOG=debug ./target/release/claude-rl-daemon
+tail -f ~/.claude-daemon/daemon.log | jq .
+```
+
 ## Install
 
 ```bash
+cdaemon install   # preferred
+# or directly:
 bash deploy/install.sh
 ```
 
-This builds a release binary, installs to `/usr/local/bin/claude-rl-daemon`,
-and registers a launchd agent that starts at login and restarts on crash.
+Builds release binaries, installs to `~/.local/bin/`, and registers a launchd agent.

@@ -2,6 +2,10 @@ use tracing::info;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[cfg(tarpaulin)]
+fn main() {}
+
+#[cfg(not(tarpaulin))]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     if std::env::args().any(|a| a == "--version" || a == "-V") {

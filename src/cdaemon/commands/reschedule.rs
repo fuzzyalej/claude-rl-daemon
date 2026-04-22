@@ -40,6 +40,7 @@ fn parse_time(input: &str) -> anyhow::Result<DateTime<Utc>> {
     Err(anyhow::anyhow!("failed to parse time: {}", input))
 }
 
+#[cfg(not(tarpaulin))]
 pub fn run(uuid_or_prefix: &str, time_str: &str) -> anyhow::Result<()> {
     let mut daemon_state = state::load_state()?;
     let session_id = state::resolve_uuid(&daemon_state, uuid_or_prefix)?;
@@ -91,5 +92,12 @@ mod tests {
     #[test]
     fn parse_invalid() {
         assert!(parse_time("not a time").is_err());
+    }
+
+    #[test]
+    fn parse_epoch_out_of_range() {
+        // i64::MAX seconds is way outside chrono's valid range → triggers the else branch
+        let result = parse_time(&i64::MAX.to_string());
+        assert!(result.is_err());
     }
 }

@@ -55,3 +55,27 @@ fn completed_sessions_not_pending() {
     sched.mark_completed("session-4");
     assert!(!sched.is_pending("session-4"));
 }
+
+#[tokio::test]
+async fn all_pending_returns_scheduled_events() {
+    let dir = tempdir().unwrap();
+    let mut sched = Scheduler::new(dir.path().join("state.json"));
+    assert!(sched.all_pending().is_empty());
+
+    sched.try_schedule(make_event("session-5", 600)).await.unwrap();
+    sched.try_schedule(make_event("session-6", 600)).await.unwrap();
+
+    let pending = sched.all_pending();
+    assert_eq!(pending.len(), 2);
+}
+
+#[tokio::test]
+async fn completed_session_not_rescheduled() {
+    let dir = tempdir().unwrap();
+    let mut sched = Scheduler::new(dir.path().join("state.json"));
+    sched.try_schedule(make_event("session-7", 600)).await.unwrap();
+    sched.mark_completed("session-7");
+    // Completed sessions must not be re-scheduled
+    let result = sched.try_schedule(make_event("session-7", 600)).await.unwrap();
+    assert!(!result);
+}

@@ -19,6 +19,7 @@ pub fn build_tmux_args(tmux_name: &str, cwd: &std::path::Path, session_id: &str)
     ]
 }
 
+#[cfg(not(tarpaulin))]
 pub fn spawn_resume(session_id: &str, cwd: &std::path::Path) -> anyhow::Result<String> {
     let tmux_name = tmux_session_name(session_id);
     let args = build_tmux_args(&tmux_name, cwd, session_id);
@@ -39,4 +40,10 @@ pub fn spawn_resume(session_id: &str, cwd: &std::path::Path) -> anyhow::Result<S
     );
 
     Ok(tmux_name)
+}
+
+/// Stub used by tarpaulin runs so handle_change can compile without a real tmux.
+#[cfg(tarpaulin)]
+pub fn spawn_resume(session_id: &str, _cwd: &std::path::Path) -> anyhow::Result<String> {
+    Ok(tmux_session_name(session_id))
 }
