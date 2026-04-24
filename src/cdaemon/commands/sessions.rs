@@ -6,6 +6,8 @@ use crate::{format, state};
 
 #[derive(Tabled)]
 struct SessionRow {
+    #[tabled(rename = "#")]
+    index: String,
     #[tabled(rename = "UUID")]
     uuid: String,
     #[tabled(rename = "Status")]
@@ -26,13 +28,16 @@ pub fn run() -> anyhow::Result<()> {
 pub fn print_sessions(daemon_state: &DaemonState) {
     let mut rows: Vec<SessionRow> = Vec::new();
 
-    for resume in daemon_state.pending.values() {
-        let r = format::session_row(resume, "pending");
-        rows.push(SessionRow { uuid: r.uuid, status: r.status, reset_at: r.reset_at, cwd: r.cwd });
+    let pending: Vec<claude_rl_daemon::PendingResume> =
+        daemon_state.pending.values().cloned().collect();
+    for (i, resume) in format::sorted_pending(&pending).iter().enumerate() {
+        let r = format::session_row(resume, "pending", i + 1);
+        rows.push(SessionRow { index: r.index, uuid: r.uuid, status: r.status, reset_at: r.reset_at, cwd: r.cwd });
     }
 
     for id in &daemon_state.completed {
         rows.push(SessionRow {
+            index: "—".to_string(),
             uuid: id.clone(),
             status: format::color_status("resumed"),
             reset_at: "—".to_string(),

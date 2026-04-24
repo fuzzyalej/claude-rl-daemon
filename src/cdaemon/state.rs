@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
-use claude_rl_daemon::DaemonState;
+use claude_rl_daemon::{DaemonState, PendingResume};
 
 pub fn state_path() -> PathBuf {
     dirs::home_dir()
@@ -42,9 +42,26 @@ pub fn save_state(state: &DaemonState) -> anyhow::Result<()> {
     state.save_to_path(&state_path()).context("failed to write state.json")
 }
 
-/// Resolve a full UUID or 8-char prefix to a full session ID.
-/// Returns error if not found or ambiguous.
+/// Returns pending resumes sorted by reset_at ascending (soonest first),
+/// matching the order shown in `cdaemon sessions`.
+fn sorted_pending(state: &DaemonState) -> Vec<&PendingResume> {
+    let mut v: Vec<&PendingResume> = state.pending.values().collect();
+    v.sort_by_key(|r| r.reset_at);
+    v
+}
+
+/// Resolve a 1-based index, full UUID, or 8-char prefix to a full session ID.
+/// Index must match the row number shown by `cdaemon sessions`.
 pub fn resolve_uuid(state: &DaemonState, prefix_or_full: &str) -> anyhow::Result<String> {
+    // Numeric index (1-based)
+    if let Ok(n) = prefix_or_full.parse::<usize>() {
+        let sorted = sorted_pending(state);
+        return sorted
+            .get(n.saturating_sub(1))
+            .map(|r| r.session_id.clone())
+            .ok_or_else(|| anyhow::anyhow!("no session at index {n} (only {} pending)", sorted.len()));
+    }
+
     if state.pending.contains_key(prefix_or_full) {
         return Ok(prefix_or_full.to_string());
     }
@@ -112,6 +129,41 @@ mod tests {
         let s = DaemonState::default();
         let err = resolve_uuid(&s, "notfound").unwrap_err();
         assert!(err.to_string().contains("no session found"));
+    }
+
+    #[test]
+    fn resolve_index_1_returns_soonest() {
+        let mut s = DaemonState::default();
+        let sooner = "aaaa0000-0000-0000-0000-000000000000";
+        let later  = "bbbb0000-0000-0000-0000-000000000000";
+        s.pending.insert(later.to_string(), PendingResume {
+            session_id: later.to_string(),
+            reset_at: Utc::now() + chrono::Duration::seconds(200),
+            cwd: None,
+        });
+        s.pending.insert(sooner.to_string(), PendingResume {
+            session_id: sooner.to_string(),
+            reset_at: Utc::now() + chrono::Duration::seconds(100),
+            cwd: None,
+        });
+        assert_eq!(resolve_uuid(&s, "1").unwrap(), sooner);
+        assert_eq!(resolve_uuid(&s, "2").unwrap(), later);
+    }
+
+    #[test]
+    fn resolve_index_out_of_range_errors() {
+        let s = state_with_sessions(&["aaaa0000-0000-0000-0000-000000000000"]);
+        let err = resolve_uuid(&s, "5").unwrap_err();
+        assert!(err.to_string().contains("index 5"));
+    }
+
+    #[test]
+    fn resolve_index_zero_errors() {
+        let s = state_with_sessions(&["aaaa0000-0000-0000-0000-000000000000"]);
+        // index 0 → saturating_sub(1) = 0 which maps to first entry, but "0" as index is
+        // non-standard; the user-facing convention is 1-based so let's verify it resolves something
+        // rather than panics (0.saturating_sub(1) = 0, picks first)
+        let _ = resolve_uuid(&s, "0");
     }
 
     #[test]

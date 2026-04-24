@@ -5,6 +5,8 @@ use tabled::{Table, Tabled};
 
 #[derive(Tabled)]
 pub struct SessionRow {
+    #[tabled(rename = "#")]
+    pub index: String,
     #[tabled(rename = "UUID")]
     pub uuid: String,
     #[tabled(rename = "Status")]
@@ -15,16 +17,28 @@ pub struct SessionRow {
     pub cwd: String,
 }
 
+/// Returns pending resumes sorted by reset_at ascending (soonest first).
+pub fn sorted_pending(resumes: &[PendingResume]) -> Vec<&PendingResume> {
+    let mut sorted: Vec<&PendingResume> = resumes.iter().collect();
+    sorted.sort_by_key(|r| r.reset_at);
+    sorted
+}
+
 pub fn format_sessions(resumes: &[PendingResume], status_label: &str) -> String {
     if resumes.is_empty() {
         return "No sessions.".dimmed().to_string();
     }
-    let rows: Vec<SessionRow> = resumes.iter().map(|r| session_row(r, status_label)).collect();
+    let rows: Vec<SessionRow> = sorted_pending(resumes)
+        .iter()
+        .enumerate()
+        .map(|(i, r)| session_row(r, status_label, i + 1))
+        .collect();
     Table::new(rows).to_string()
 }
 
-pub fn session_row(r: &PendingResume, status_label: &str) -> SessionRow {
+pub fn session_row(r: &PendingResume, status_label: &str, index: usize) -> SessionRow {
     SessionRow {
+        index: index.to_string(),
         uuid: r.session_id.clone(),
         status: color_status(status_label),
         reset_at: format_reset_at(r.reset_at),
@@ -121,17 +135,44 @@ mod tests {
     }
 
     #[test]
+    fn format_sessions_numbers_rows() {
+        let r = pending_resume("my-session-id", None);
+        let s = format_sessions(&[r], "pending");
+        assert!(s.contains('1'), "table should contain row number 1");
+    }
+
+    #[test]
     fn session_row_no_cwd_uses_dash() {
         let r = pending_resume("abc", None);
-        let row = session_row(&r, "pending");
+        let row = session_row(&r, "pending", 1);
         assert_eq!(row.cwd, "—");
+        assert_eq!(row.index, "1");
     }
 
     #[test]
     fn session_row_cwd_outside_home_unchanged() {
         let r = pending_resume("abc", Some("/tmp/project"));
-        let row = session_row(&r, "pending");
+        let row = session_row(&r, "pending", 2);
         assert_eq!(row.cwd, "/tmp/project");
+        assert_eq!(row.index, "2");
+    }
+
+    #[test]
+    fn sorted_pending_orders_by_reset_at() {
+        let later = PendingResume {
+            session_id: "later".to_string(),
+            reset_at: Utc::now() + Duration::seconds(300),
+            cwd: None,
+        };
+        let sooner = PendingResume {
+            session_id: "sooner".to_string(),
+            reset_at: Utc::now() + Duration::seconds(60),
+            cwd: None,
+        };
+        let resumes = [later, sooner];
+        let sorted = sorted_pending(&resumes);
+        assert_eq!(sorted[0].session_id, "sooner");
+        assert_eq!(sorted[1].session_id, "later");
     }
 
     #[test]
