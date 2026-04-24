@@ -15,7 +15,7 @@ A background Rust daemon that watches Claude Code sessions and automatically res
 bash deploy/install.sh
 ```
 
-Builds a release binary, installs to `/usr/local/bin/claude-rl-daemon`, and registers a launchd agent that starts at login and restarts on crash.
+Builds release binaries, installs `claude-rl-daemon` and `cdaemon` to `~/.local/bin/`, and registers a launchd agent that starts at login and restarts on crash.
 
 ## Management CLI (cdaemon)
 
@@ -38,7 +38,7 @@ Builds a release binary, installs to `/usr/local/bin/claude-rl-daemon`, and regi
 | `cdaemon start` / `cdaemon stop` | Start or stop the daemon |
 | `cdaemon completions zsh` | Print zsh completion script |
 
-Commands that take a UUID accept either the full UUID or the first 8 characters.
+Commands that take a UUID accept a full UUID, the first 8 characters, or the 1-based row index shown by `cdaemon sessions` (e.g. `cdaemon cancel 1`).
 
 ### Shell completions
 
@@ -101,16 +101,21 @@ tmux attach -t claude-rl-fc456884 # attach to a specific one
 ## Manage the daemon
 
 ```bash
-# Stop
-launchctl unload ~/Library/LaunchAgents/com.claudedaemon.plist
+# Stop / Start (preferred)
+cdaemon stop
+cdaemon start
 
-# Start
+# Or directly via launchctl
+launchctl unload ~/Library/LaunchAgents/com.claudedaemon.plist
 launchctl load ~/Library/LaunchAgents/com.claudedaemon.plist
 
 # Uninstall
+cdaemon uninstall
+# or manually:
 launchctl unload ~/Library/LaunchAgents/com.claudedaemon.plist
 rm ~/Library/LaunchAgents/com.claudedaemon.plist
-rm /usr/local/bin/claude-rl-daemon
+rm ~/.local/bin/claude-rl-daemon
+rm ~/.local/bin/cdaemon
 ```
 
 ## Run manually (no launchd)

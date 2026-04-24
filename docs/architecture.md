@@ -45,22 +45,26 @@ FSEvents (notify)
 - On restart, `Scheduler::new()` reloads state and `restore_pending_resumes()` re-arms all timers
 
 ### `tmux.rs`
+- `find_tmux_binary()` — probes known Homebrew locations before falling back to bare `tmux` (LaunchAgents run with a stripped PATH)
 - `tmux_session_name()` — `claude-rl-<uuid_prefix_8chars>`
 - `build_tmux_args()` — pure function for testing without exec
 - `spawn_resume()` — runs `tmux new-session -d -s <name> -c <cwd> "claude --resume <uuid>"`
+- All three pure functions are exported from the library crate for use by `cdaemon hook`
 
 ### `notify.rs`
 - macOS: `osascript` for native notifications
 - Other platforms: log-only no-op
 
 ### `cdaemon/`
-- `state.rs` — path helpers + `resolve_uuid()` (full UUID or 8-char prefix)
+- `state.rs` — path helpers + `resolve_uuid()` (full UUID, 8-char prefix, or 1-based row index matching `cdaemon sessions` order)
 - `format.rs` — pure formatting functions for table output
 - `commands/` — one module per CLI subcommand; business logic extracted to testable pure functions
 
 ## Testability strategy
 
-System-interaction code (tmux, launchctl, osascript) is excluded from coverage via `#[cfg(not(tarpaulin))]`. These functions are compiled out when tarpaulin runs, and stubs are provided where necessary (e.g., `spawn_resume` returns a fake session name). This allows 97%+ line coverage without requiring real system tools in CI.
+System-interaction code (tmux, launchctl, osascript) is excluded from coverage via `#[cfg(not(tarpaulin))]`. These functions are compiled out when tarpaulin runs, and stubs are provided where necessary (e.g., `spawn_resume` returns a fake session name without invoking tmux). This approach avoids polluting production types with test-only interfaces while still achieving 97%+ line coverage.
+
+The two `main()` entry points and the tmux-binary fallback path are not coverable without OS-level mocking and are excluded from the coverage target.
 
 ## Rate-limit detection patterns
 

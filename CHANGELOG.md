@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.1] — 2026-04-24
+
+### Added
+- Numeric index (1-based) resolution in all session commands — `cdaemon cancel 1`, `cdaemon hook 2`, etc.; index matches the row order shown by `cdaemon sessions` (soonest reset first)
+- macOS native notifications via `osascript` when a resume is scheduled and when it completes (or fails)
+- `tmux` utilities (`find_tmux_binary`, `tmux_session_name`, `build_tmux_args`) exported as `pub` from the library crate for use by `cdaemon hook`
+
+### Changed
+- `cdaemon hook` and `cdaemon cancel` now accept a 1-based row index in addition to full UUID and 8-char prefix
+- Test coverage raised to 97% via inline unit tests; system-boundary functions (tmux, osascript) compile out under tarpaulin and are replaced with safe stubs
+
+---
+
 ## [0.2.0] — 2026-04-20
 
 ### Added

@@ -131,20 +131,31 @@ pub async fn resume_after(event: crate::detector::RateLimitEvent, scheduler: Arc
     );
     sleep(delay).await;
     let cwd = event.cwd.unwrap_or_else(|| PathBuf::from("."));
-    match spawn_resume(&event.session_id, &cwd) {
+    let result = spawn_resume(&event.session_id, &cwd);
+    handle_spawn_result(&event.session_id, result, scheduler).await;
+}
+
+pub(crate) async fn handle_spawn_result(
+    session_id: &str,
+    result: anyhow::Result<String>,
+    scheduler: Arc<Mutex<Scheduler>>,
+) {
+    match result {
         Ok(tmux_name) => {
             let mut s = scheduler.lock().await;
-            s.mark_completed(&event.session_id);
-            info!(
-                session_id = event.session_id,
-                tmux_session = tmux_name,
-                "resume spawned"
+            s.mark_completed(session_id);
+            info!(session_id, tmux_session = tmux_name, "resume spawned");
+            let _ = crate::notify::notify(
+                "Resume spawned",
+                &format!("Session {} resumed in tmux {}", session_id, tmux_name),
             );
-            let _ = crate::notify::notify("Resume spawned", &format!("Session {} resumed in tmux {}", event.session_id, tmux_name));
         }
         Err(e) => {
-            let _ = crate::notify::notify("Resume failed", &format!("Session {} failed to resume: {}", event.session_id, e));
-            error!(session_id = event.session_id, error = %e, "failed to spawn resume")
+            let _ = crate::notify::notify(
+                "Resume failed",
+                &format!("Session {} failed to resume: {}", session_id, e),
+            );
+            error!(session_id, error = %e, "failed to spawn resume")
         }
     }
 }
@@ -385,6 +396,45 @@ mod tests {
             watch_rx.recv(),
         ).await;
         assert!(queued.is_ok(), "expected a JSONL path to be queued for watching");
+    }
+
+    // ── handle_spawn_result ───────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn handle_spawn_result_ok_marks_completed() {
+        let dir = tempdir().unwrap();
+        let scheduler = Arc::new(Mutex::new(Scheduler::new(dir.path().join("state.json"))));
+        let event = crate::detector::RateLimitEvent {
+            session_id: "spawn-ok-test".to_string(),
+            reset_at: chrono::Utc::now() - chrono::Duration::seconds(1),
+            cwd: Some(dir.path().to_path_buf()),
+        };
+        scheduler.lock().await.try_schedule(event.clone()).await.unwrap();
+
+        handle_spawn_result("spawn-ok-test", Ok("claude-rl-spawnok1".to_string()), Arc::clone(&scheduler)).await;
+
+        assert!(!scheduler.lock().await.is_pending("spawn-ok-test"));
+    }
+
+    #[tokio::test]
+    async fn handle_spawn_result_err_leaves_session_pending() {
+        let dir = tempdir().unwrap();
+        let scheduler = Arc::new(Mutex::new(Scheduler::new(dir.path().join("state.json"))));
+        let event = crate::detector::RateLimitEvent {
+            session_id: "spawn-err-test".to_string(),
+            reset_at: chrono::Utc::now() - chrono::Duration::seconds(1),
+            cwd: Some(dir.path().to_path_buf()),
+        };
+        scheduler.lock().await.try_schedule(event.clone()).await.unwrap();
+
+        handle_spawn_result(
+            "spawn-err-test",
+            Err(anyhow::anyhow!("tmux not found")),
+            Arc::clone(&scheduler),
+        ).await;
+
+        // On error the session stays pending (we don't mark it completed)
+        assert!(scheduler.lock().await.is_pending("spawn-err-test"));
     }
 
     // ── resume_after ──────────────────────────────────────────────────────────
