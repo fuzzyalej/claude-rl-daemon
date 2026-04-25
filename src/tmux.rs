@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 use tracing::{error, info};
 
@@ -24,6 +25,16 @@ pub fn find_tmux_binary() -> PathBuf {
 pub fn tmux_session_name(session_id: &str) -> String {
     let prefix = &session_id[..8.min(session_id.len())];
     format!("claude-rl-{prefix}")
+}
+
+pub fn build_send_keys_args(tmux_name: &str) -> Vec<String> {
+    vec![
+        "send-keys".into(),
+        "-t".into(),
+        tmux_name.to_string(),
+        "continue".into(),
+        "Enter".into(),
+    ]
 }
 
 pub fn build_tmux_args(tmux_name: &str, cwd: &std::path::Path, session_id: &str) -> Vec<String> {
@@ -59,6 +70,15 @@ pub fn spawn_resume(session_id: &str, cwd: &std::path::Path) -> anyhow::Result<S
         "resume launched — attach with: tmux attach -t {tmux_name}"
     );
 
+    std::thread::sleep(Duration::from_secs(5));
+    let sk_status = Command::new(&tmux_bin)
+        .args(build_send_keys_args(&tmux_name))
+        .status()?;
+    if !sk_status.success() {
+        anyhow::bail!("tmux send-keys exited with status {sk_status}");
+    }
+    info!(session_id, tmux_session = tmux_name, "sent 'continue' to session");
+
     Ok(tmux_name)
 }
 
@@ -93,6 +113,16 @@ mod tests {
     fn tmux_session_name_short_id() {
         let name = tmux_session_name("abc");
         assert_eq!(name, "claude-rl-abc");
+    }
+
+    #[test]
+    fn build_send_keys_args_structure() {
+        let args = build_send_keys_args("claude-rl-abc12345");
+        assert_eq!(args[0], "send-keys");
+        assert_eq!(args[1], "-t");
+        assert_eq!(args[2], "claude-rl-abc12345");
+        assert_eq!(args[3], "continue");
+        assert_eq!(args[4], "Enter");
     }
 
     #[test]
