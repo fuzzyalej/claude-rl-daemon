@@ -1,8 +1,20 @@
 use chrono::{DateTime, Local, Utc, TimeZone};
+use claude_rl_daemon::DaemonState;
 use colored::Colorize;
 use humantime;
 
 use crate::state;
+
+pub fn execute(daemon_state: &mut DaemonState, uuid_or_prefix: &str, time_str: &str) -> anyhow::Result<()> {
+    let session_id = state::resolve_uuid(daemon_state, uuid_or_prefix)?;
+    let resume = daemon_state
+        .pending
+        .get_mut(&session_id)
+        .ok_or_else(|| anyhow::anyhow!("session '{}' is not pending", session_id))?;
+    let new_dt = parse_time(time_str)?;
+    resume.reset_at = new_dt;
+    Ok(())
+}
 
 fn parse_time(input: &str) -> anyhow::Result<DateTime<Utc>> {
     let s = input.trim();
@@ -43,27 +55,35 @@ fn parse_time(input: &str) -> anyhow::Result<DateTime<Utc>> {
 #[cfg(not(tarpaulin))]
 pub fn run(uuid_or_prefix: &str, time_str: &str) -> anyhow::Result<()> {
     let mut daemon_state = state::load_state()?;
+    execute(&mut daemon_state, uuid_or_prefix, time_str)?;
     let session_id = state::resolve_uuid(&daemon_state, uuid_or_prefix)?;
-
-    let resume = daemon_state
-        .pending
-        .get_mut(&session_id)
-        .ok_or_else(|| anyhow::anyhow!("session '{}' is not pending", session_id))?;
-
-    let new_dt = parse_time(time_str)?;
-    resume.reset_at = new_dt;
-
+    let new_dt = daemon_state.pending[&session_id].reset_at;
     state::save_state(&daemon_state)?;
-
     println!("{} rescheduled pending resume for {} to {}", "✓".green(), &session_id[..8], new_dt.with_timezone(&Local).to_rfc3339());
-    println!("Note: the daemon must be restarted to pick up this change immediately if it\'s already running.");
+    println!("Note: the daemon must be restarted to pick up this change immediately if it's already running.");
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_time;
+    use super::*;
     use chrono::Utc;
+    use claude_rl_daemon::PendingResume;
+
+    #[test]
+    fn execute_updates_reset_at() {
+        let mut s = claude_rl_daemon::DaemonState::default();
+        s.pending.insert("abc".to_string(), PendingResume {
+            session_id: "abc".to_string(),
+            reset_at: Utc::now(),
+            cwd: None,
+        });
+        execute(&mut s, "abc", "+10m").unwrap();
+        let new_dt = s.pending["abc"].reset_at;
+        assert!((new_dt - Utc::now()).num_seconds() > 500);
+    }
+
+    use super::parse_time;
 
     #[test]
     fn parse_iso8601() {

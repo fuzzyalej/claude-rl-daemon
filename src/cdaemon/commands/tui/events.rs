@@ -112,8 +112,10 @@ fn handle_dialog_key(
                 KeyCode::Esc => app.close_dialog(),
                 KeyCode::Enter => {
                     if !input.is_empty() {
-                        // TODO: replace with reschedule::execute once Task 5 is done
-                        let _ = crate::commands::reschedule::run(&uuid, &input);
+                        if let Ok(mut state) = state::load_state() {
+                            let _ = crate::commands::reschedule::execute(&mut state, &uuid, &input);
+                            let _ = state::save_state(&state);
+                        }
                     }
                     app.close_dialog();
                     app.reload();
