@@ -21,6 +21,34 @@ Builds release binaries, installs `claude-rl-daemon` and `cdaemon` to `~/.local/
 
 `cdaemon` is the management interface for the daemon.
 
+### Interactive TUI
+
+Running `cdaemon` with no arguments opens an interactive dashboard:
+
+```bash
+cdaemon
+```
+
+The TUI shows:
+- **Status bar** — daemon running state and last refresh time
+- **Sessions table** — pending resumes with UUID, project directory, and countdown
+- **Logs panel** — last 200 lines from the daemon log
+
+**Keybindings:**
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Navigate sessions |
+| `x` | Cancel selected resume |
+| `e` | Resume selected session now |
+| `s` | Reschedule selected session (enter new time, e.g. `+2h`) |
+| `h` | Attach to selected session's tmux window |
+| `d` | Run doctor check (overlay) |
+| `l` | Expand logs fullscreen |
+| `r` | Force refresh |
+| `Tab` | Toggle focus (sessions / logs) |
+| `q` / `Esc` / `Ctrl-C` | Quit |
+
 ### Quick reference
 
 | Command | Description |
