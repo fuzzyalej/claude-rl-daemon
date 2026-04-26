@@ -63,6 +63,7 @@ impl App {
             }
         }
         self.load_logs();
+        self.reload_daemon_status();
         self.last_refresh = Instant::now();
     }
 
@@ -89,6 +90,15 @@ impl App {
 
     pub fn close_dialog(&mut self) {
         self.dialog = None;
+    }
+
+    pub fn reload_daemon_status(&mut self) {
+        let ok = std::process::Command::new("launchctl")
+            .args(["list", "com.claudedaemon"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        self.daemon_running = ok;
     }
 
     pub fn load_logs_from(&mut self, path: &Path) {
