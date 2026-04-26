@@ -8,3 +8,4 @@ pub mod reschedule;
 pub mod service;
 pub mod sessions;
 pub mod status;
+pub mod tui;

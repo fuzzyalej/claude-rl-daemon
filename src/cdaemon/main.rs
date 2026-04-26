@@ -10,7 +10,7 @@ use clap_complete::Shell;
 #[command(name = "cdaemon", version, about = "Manage claude-rl-daemon sessions and service")]
 pub struct Cli {
     #[command(subcommand)]
-    command: Cmd,
+    command: Option<Cmd>,
 }
 
 #[derive(Subcommand)]
@@ -74,18 +74,19 @@ fn main() {}
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Cmd::Status => commands::status::run(),
-        Cmd::Sessions => commands::sessions::run(),
-        Cmd::Logs { follow, lines } => commands::logs::run(follow, lines),
-        Cmd::Install => commands::service::install(),
-        Cmd::Start => commands::service::start(),
-        Cmd::Stop => commands::service::stop(),
-        Cmd::Uninstall => commands::service::uninstall(),
-        Cmd::Hook { uuid } => commands::hook::run(&uuid),
-        Cmd::Resume { uuid } => commands::resume::run(&uuid),
-        Cmd::Reschedule { uuid, time } => commands::reschedule::run(&uuid, &time),
-        Cmd::Cancel { uuid } => commands::cancel::run(&uuid),
-        Cmd::Doctor => commands::doctor::run(),
-        Cmd::Completions { shell } => commands::completions::run(shell),
+        None => commands::tui::run(),
+        Some(Cmd::Status) => commands::status::run(),
+        Some(Cmd::Sessions) => commands::sessions::run(),
+        Some(Cmd::Logs { follow, lines }) => commands::logs::run(follow, lines),
+        Some(Cmd::Install) => commands::service::install(),
+        Some(Cmd::Start) => commands::service::start(),
+        Some(Cmd::Stop) => commands::service::stop(),
+        Some(Cmd::Uninstall) => commands::service::uninstall(),
+        Some(Cmd::Hook { uuid }) => commands::hook::run(&uuid),
+        Some(Cmd::Resume { uuid }) => commands::resume::run(&uuid),
+        Some(Cmd::Reschedule { uuid, time }) => commands::reschedule::run(&uuid, &time),
+        Some(Cmd::Cancel { uuid }) => commands::cancel::run(&uuid),
+        Some(Cmd::Doctor) => commands::doctor::run(),
+        Some(Cmd::Completions { shell }) => commands::completions::run(shell),
     }
 }
