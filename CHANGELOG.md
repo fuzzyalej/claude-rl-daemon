@@ -7,6 +7,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.4] — 2026-04-26
+
+### Fixed
+- **TUI Warnings**: Fixed unused variable and unused enum variant warnings in the TUI event handling logic.
+
+---
+
+## [0.2.3] — 2026-04-26
+
+### Added
+- **TUI Dashboard**: Completed the TUI dashboard for `cdaemon` with full session and log views.
+- **Service Monitoring**: Integrated daemon running status from `launchctl` into the TUI status bar.
+- **Better Tests**: Improved test coverage and reliability for session detection and state management.
+
+### Changed
+- Improved session detection logic and documentation.
+
+---
+
 ## [0.2.2] — 2026-04-24
 
 ### Added

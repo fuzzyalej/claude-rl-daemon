@@ -54,7 +54,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyhow::Res
                     last_auto_refresh = Instant::now();
                 }
             }
-            Some(AppEvent::Refresh) | None => {
+            None => {
                 app.reload();
                 last_auto_refresh = Instant::now();
             }

@@ -10,7 +10,6 @@ use crate::state;
 pub enum AppEvent {
     Key(KeyEvent),
     Tick,
-    Refresh,
 }
 
 pub fn next_event(tick_ms: u64) -> anyhow::Result<Option<AppEvent>> {
@@ -79,7 +78,7 @@ pub fn handle_key(
 fn handle_dialog_key(
     app: &mut App,
     key: KeyEvent,
-    terminal: &mut ratatui::Terminal<CrosstermBackend<io::Stdout>>,
+    _terminal: &mut ratatui::Terminal<CrosstermBackend<io::Stdout>>,
 ) -> anyhow::Result<bool> {
     match &app.dialog.clone() {
         Some(Dialog::ConfirmCancel { uuid }) => {
