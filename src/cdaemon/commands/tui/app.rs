@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::path::Path;
 use std::time::Instant;
 
 use claude_rl_daemon::DaemonState;
@@ -61,6 +62,7 @@ impl App {
                 self.error = Some(format!("State error: {e}"));
             }
         }
+        self.load_logs();
         self.last_refresh = Instant::now();
     }
 
@@ -87,6 +89,20 @@ impl App {
 
     pub fn close_dialog(&mut self) {
         self.dialog = None;
+    }
+
+    pub fn load_logs_from(&mut self, path: &Path) {
+        self.logs.clear();
+        if let Ok(content) = std::fs::read_to_string(path) {
+            for line in content.lines().rev().take(200).collect::<Vec<_>>().into_iter().rev() {
+                self.logs.push_back(line.to_string());
+            }
+        }
+    }
+
+    pub fn load_logs(&mut self) {
+        let path = crate::state::log_path();
+        self.load_logs_from(&path);
     }
 
     pub fn selected_uuid(&self) -> Option<String> {
@@ -148,5 +164,17 @@ mod tests {
         assert!(app.dialog.is_some());
         app.close_dialog();
         assert!(app.dialog.is_none());
+    }
+
+    #[test]
+    fn load_logs_fills_deque() {
+        let mut app = make_app();
+        use std::io::Write;
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        writeln!(f, "line one").unwrap();
+        writeln!(f, "line two").unwrap();
+        app.load_logs_from(f.path());
+        assert_eq!(app.logs.len(), 2);
+        assert!(app.logs.back().unwrap().contains("line two"));
     }
 }
