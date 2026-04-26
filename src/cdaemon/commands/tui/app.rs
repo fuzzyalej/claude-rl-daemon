@@ -23,6 +23,7 @@ pub enum Dialog {
 
 pub struct App {
     pub daemon_state: DaemonState,
+    pub active_sessions: Vec<String>,
     pub logs: VecDeque<String>,
     pub selected: usize,
     pub session_count: usize,
@@ -37,6 +38,7 @@ impl App {
     pub fn new() -> Self {
         Self {
             daemon_state: DaemonState::default(),
+            active_sessions: Vec::new(),
             logs: VecDeque::with_capacity(200),
             selected: 0,
             session_count: 0,
@@ -49,9 +51,19 @@ impl App {
     }
 
     pub fn reload(&mut self) {
+        let claude_dir = dirs::home_dir().expect("home dir").join(".claude");
+        let active_jsonls = claude_rl_daemon::watcher::discover_active_jsonls(&claude_dir);
+        self.active_sessions = active_jsonls
+            .into_iter()
+            .filter_map(|p| p.file_stem().and_then(|s| s.to_str()).map(String::from))
+            .collect();
+
         match state::load_state() {
             Ok(s) => {
-                self.session_count = s.pending.len();
+                // Filter active sessions to exclude those that are already pending
+                self.active_sessions.retain(|id| !s.pending.contains_key(id));
+
+                self.session_count = s.pending.len() + self.active_sessions.len();
                 if self.session_count > 0 && self.selected >= self.session_count {
                     self.selected = self.session_count - 1;
                 }
@@ -116,9 +128,14 @@ impl App {
     }
 
     pub fn selected_uuid(&self) -> Option<String> {
+        if self.selected < self.active_sessions.len() {
+            return Some(self.active_sessions[self.selected].clone());
+        }
+
+        let pending_idx = self.selected - self.active_sessions.len();
         let mut pending: Vec<_> = self.daemon_state.pending.values().collect();
         pending.sort_by_key(|r| r.reset_at);
-        pending.get(self.selected).map(|r| r.session_id.clone())
+        pending.get(pending_idx).map(|r| r.session_id.clone())
     }
 }
 
@@ -186,5 +203,25 @@ mod tests {
         app.load_logs_from(f.path());
         assert_eq!(app.logs.len(), 2);
         assert!(app.logs.back().unwrap().contains("line two"));
+    }
+
+    #[test]
+    fn selected_uuid_returns_active_or_pending() {
+        let mut app = make_app();
+        app.active_sessions = vec!["active1".to_string(), "active2".to_string()];
+        app.daemon_state.pending.insert("pending1".to_string(), claude_rl_daemon::PendingResume {
+            session_id: "pending1".to_string(),
+            reset_at: chrono::Utc::now(),
+            cwd: None,
+        });
+        app.session_count = 3;
+
+        assert_eq!(app.selected_uuid(), Some("active1".to_string()));
+        app.selected = 1;
+        assert_eq!(app.selected_uuid(), Some("active2".to_string()));
+        app.selected = 2;
+        assert_eq!(app.selected_uuid(), Some("pending1".to_string()));
+        app.selected = 3;
+        assert_eq!(app.selected_uuid(), None);
     }
 }

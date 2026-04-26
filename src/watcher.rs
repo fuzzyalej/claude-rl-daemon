@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use notify::event::{EventKind, ModifyKind};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::sleep;
@@ -36,10 +35,7 @@ pub async fn run() -> anyhow::Result<()> {
             let tx = file_tx.clone();
             move |res: notify::Result<notify::Event>| {
                 if let Ok(event) = res {
-                    if matches!(
-                        event.kind,
-                        EventKind::Modify(ModifyKind::Data(_)) | EventKind::Create(_)
-                    ) {
+                    if event.kind.is_modify() || event.kind.is_create() {
                         for path in event.paths {
                             let _ = tx.blocking_send(path);
                         }
@@ -53,21 +49,45 @@ pub async fn run() -> anyhow::Result<()> {
     watcher.watch(&sessions_dir, RecursiveMode::NonRecursive)?;
     info!(dir = ?sessions_dir, "watching sessions directory");
 
+    let offsets: Arc<Mutex<HashMap<PathBuf, u64>>> = Arc::new(Mutex::new(HashMap::new()));
+
     for jsonl in discover_active_jsonls(&claude_dir) {
         if jsonl.exists() {
             watcher.watch(&jsonl, RecursiveMode::NonRecursive)?;
             info!(path = ?jsonl, "watching active session JSONL");
+            // Scan existing lines for rate limits that happened while we were offline
+            handle_change(
+                jsonl,
+                &claude_dir,
+                Arc::clone(&scheduler),
+                Arc::clone(&offsets),
+                watch_tx.clone(),
+            )
+            .await;
         }
     }
-
-    let offsets: Arc<Mutex<HashMap<PathBuf, u64>>> = Arc::new(Mutex::new(HashMap::new()));
 
     loop {
         tokio::select! {
             Some(path) = watch_rx.recv() => {
+                let mut attempts = 0;
+                while !path.exists() && attempts < 5 {
+                    sleep(Duration::from_millis(200)).await;
+                    attempts += 1;
+                }
                 if path.exists() {
                     let _ = watcher.watch(&path, RecursiveMode::NonRecursive);
                     info!(path = ?path, "watching new session JSONL");
+                    // Also scan it immediately in case it already has content
+                    handle_change(
+                        path,
+                        &claude_dir,
+                        Arc::clone(&scheduler),
+                        Arc::clone(&offsets),
+                        watch_tx.clone(),
+                    ).await;
+                } else {
+                    error!(path = ?path, "session JSONL never appeared, giving up");
                 }
             }
             Some(path) = file_rx.recv() => {
@@ -162,7 +182,7 @@ pub(crate) async fn handle_spawn_result(
 
 pub async fn read_new_lines(path: &PathBuf, offsets: Arc<Mutex<HashMap<PathBuf, u64>>>) -> Vec<String> {
     let mut off = offsets.lock().await;
-    let current_offset = *off.get(path).unwrap_or(&0);
+    let mut current_offset = *off.get(path).unwrap_or(&0);
 
     let Ok(mut file) = std::fs::File::open(path) else {
         return vec![];
@@ -170,6 +190,11 @@ pub async fn read_new_lines(path: &PathBuf, offsets: Arc<Mutex<HashMap<PathBuf, 
     let Ok(meta) = file.metadata() else {
         return vec![];
     };
+
+    if meta.len() < current_offset {
+        // File was truncated, reset offset
+        current_offset = 0;
+    }
 
     if meta.len() <= current_offset {
         return vec![];

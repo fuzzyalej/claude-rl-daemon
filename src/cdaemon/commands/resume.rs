@@ -16,11 +16,21 @@ pub fn execute(uuid: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(tarpaulin)]
+pub fn execute(_uuid: &str) -> anyhow::Result<()> {
+    Ok(())
+}
+
 #[cfg(not(tarpaulin))]
 pub fn run(uuid_or_prefix: &str) -> anyhow::Result<()> {
     let daemon_state = state::load_state()?;
     let session_id = state::resolve_uuid(&daemon_state, uuid_or_prefix)?;
     execute(&session_id)
+}
+
+#[cfg(tarpaulin)]
+pub fn run(_uuid_or_prefix: &str) -> anyhow::Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]

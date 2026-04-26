@@ -25,9 +25,9 @@ FSEvents (notify)
 ## Module responsibilities
 
 ### `watcher.rs`
-- `run()` — top-level async loop; watches FSEvents via `notify` crate
+- `run()` — top-level async loop; watches FSEvents via `notify` crate; includes a **retry loop** for new sessions to handle delayed `.jsonl` file creation
 - `handle_change()` — dispatches on file extension: `.json` (session PID) → queue JSONL; `.jsonl` → detect rate limits
-- `read_new_lines()` — incremental file read using a seek-offset map (tail-follow pattern)
+- `read_new_lines()` — incremental file read using a seek-offset map (tail-follow pattern); **handles file truncations** by resetting the offset if the file size shrinks
 - `discover_active_jsonls()` — on startup, finds JSONL paths for already-open sessions
 - `resume_after()` — awaits `reset_at`, then calls `spawn_resume`; exposed as `pub` for testing
 

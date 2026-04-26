@@ -7,7 +7,9 @@ use crate::{format, state};
 pub fn run() -> anyhow::Result<()> {
     let daemon_state = state::load_state()?;
     let daemon_status = query_launchctl_status();
-    print_status(&daemon_state, &daemon_status);
+    let claude_dir = dirs::home_dir().expect("home dir").join(".claude");
+    let active_count = claude_rl_daemon::watcher::discover_active_jsonls(&claude_dir).len();
+    print_status(&daemon_state, &daemon_status, active_count);
     Ok(())
 }
 
@@ -38,18 +40,20 @@ pub fn query_launchctl_status() -> DaemonStatus {
     }
 }
 
-pub fn print_status(daemon_state: &DaemonState, status: &DaemonStatus) {
+pub fn print_status(daemon_state: &DaemonState, status: &DaemonStatus, active_count: usize) {
     let pending: Vec<_> = daemon_state.pending.values().cloned().collect();
 
     println!("Daemon    {}  {}", status.label, status.pid);
     println!(
-        "Sessions  {} pending, {} completed",
+        "Sessions  {} active, {} pending, {} completed",
+        active_count,
         pending.len(),
         daemon_state.completed.len()
     );
 
     if !pending.is_empty() {
         println!();
+        println!("Pending Resumes:");
         println!("{}", format::format_sessions(&pending, "pending"));
     }
 }
@@ -66,7 +70,7 @@ mod tests {
 
     #[test]
     fn prints_empty_state() {
-        print_status(&DaemonState::default(), &stopped());
+        print_status(&DaemonState::default(), &stopped(), 0);
     }
 
     #[test]
@@ -77,13 +81,13 @@ mod tests {
             reset_at: Utc::now(),
             cwd: None,
         });
-        print_status(&s, &stopped());
+        print_status(&s, &stopped(), 1);
     }
 
     #[test]
     fn prints_completed_sessions() {
         let mut s = DaemonState::default();
         s.completed.insert("done-session".to_string());
-        print_status(&s, &stopped());
+        print_status(&s, &stopped(), 0);
     }
 }

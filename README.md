@@ -4,10 +4,11 @@ A background Rust daemon that watches Claude Code sessions and automatically res
 
 ## How it works
 
-1. Watches `~/.claude/sessions/` for active Claude Code processes
-2. Tails each session's JSONL file for rate-limit error messages
-3. Extracts the reset timestamp and waits (plus a 15-second buffer)
-4. Spawns `claude --resume <uuid>` in a detached tmux session
+1. **Startup Discovery**: On launch, the daemon scans `~/.claude/sessions/` to identify and watch all existing active Claude Code sessions.
+2. **Real-time Monitoring**: Watches `~/.claude/sessions/` for new Claude Code processes and monitors their JSONL files with a retry loop to handle delayed file creation.
+3. **Rate-limit Detection**: Tails each session's JSONL file, handling file truncations gracefully, to detect rate-limit error messages.
+4. **Rescheduling**: Extracts the reset timestamp and waits (plus a 15-second buffer).
+5. **Automatic Resume**: Spawns `claude --resume <uuid>` in a detached tmux session.
 
 ## Install
 
@@ -31,7 +32,7 @@ cdaemon
 
 The TUI shows:
 - **Status bar** — daemon running state and last refresh time
-- **Sessions table** — pending resumes with UUID, project directory, and countdown
+- **Sessions table** — **Active sessions** (in green) and **Pending resumes** with UUID, project directory, and countdown
 - **Logs panel** — last 200 lines from the daemon log
 
 **Keybindings:**

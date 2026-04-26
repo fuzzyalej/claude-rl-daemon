@@ -7,6 +7,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.2] — 2026-04-24
+
+### Added
+- **Active Session Visibility**: `cdaemon status` and `cdaemon sessions` now show active Claude sessions that haven't hit rate limits yet.
+- **TUI Improvements**: Active sessions are now displayed at the top of the TUI in green with a '●' indicator.
+- **Startup Scanning**: The daemon now performs a full scan of `~/.claude/sessions/` on startup to detect and watch active sessions immediately.
+- **Improved Detection Reliability**:
+  - Added a retry loop to catch `.jsonl` files that appear shortly after their `.json` metadata file.
+  - Broader event matching for file modifications and creations.
+  - Handled file truncation events in `read_new_lines` to prevent redundant processing.
+
+### Fixed
+- TUI index resolution logic now correctly maps keyboard selection to the underlying session list (active + pending).
+
+---
+
 ## [0.2.1] — 2026-04-24
 
 ### Added

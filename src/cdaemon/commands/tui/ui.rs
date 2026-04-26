@@ -48,35 +48,72 @@ fn draw_sessions(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     use claude_rl_daemon::PendingResume;
 
     let block = Block::default()
-        .title(format!(" SESSIONS ({} pending) ", app.daemon_state.pending.len()))
+        .title(format!(
+            " SESSIONS ({} active, {} pending) ",
+            app.active_sessions.len(),
+            app.daemon_state.pending.len()
+        ))
         .borders(Borders::ALL);
 
+    let mut rows: Vec<Row> = Vec::new();
+
+    // 1. Active sessions
+    for (i, session_id) in app.active_sessions.iter().enumerate() {
+        let cursor = if i == app.selected { "▶" } else { " " };
+        let uuid_short = &session_id[..8.min(session_id.len())];
+
+        let style = if i == app.selected {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default().fg(Color::Green)
+        };
+
+        rows.push(
+            Row::new(vec![
+                cursor.to_string(),
+                "●".to_string(),
+                uuid_short.to_string(),
+                "—".to_string(),
+                "—".to_string(),
+                "active".to_string(),
+            ])
+            .style(style),
+        );
+    }
+
+    // 2. Pending sessions
     let pending: Vec<PendingResume> = app.daemon_state.pending.values().cloned().collect();
     let sorted = format::sorted_pending(&pending);
 
-    let rows: Vec<Row> = sorted.iter().enumerate().map(|(i, r)| {
-        let cursor = if i == app.selected { "▶" } else { " " };
+    for (i, r) in sorted.iter().enumerate() {
+        let idx = i + app.active_sessions.len();
+        let cursor = if idx == app.selected { "▶" } else { " " };
         let uuid_short = &r.session_id[..8.min(r.session_id.len())];
-        let cwd = r.cwd.as_ref()
+        let cwd = r
+            .cwd
+            .as_ref()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| "—".into());
         let reset = format::format_reset_at(r.reset_at);
 
-        let style = if i == app.selected {
+        let style = if idx == app.selected {
             Style::default().add_modifier(Modifier::REVERSED)
         } else {
             Style::default()
         };
 
-        Row::new(vec![
-            cursor.to_string(),
-            format!("{}", i + 1),
-            uuid_short.to_string(),
-            cwd,
-            reset,
-            "pending".to_string(),
-        ]).style(style)
-    }).collect();
+        rows.push(
+            Row::new(vec![
+                cursor.to_string(),
+                format!("{}", i + 1),
+                uuid_short.to_string(),
+                cwd,
+                reset,
+                "pending".to_string(),
+            ])
+            .style(style),
+        );
+    }
 
     let widths = [
         Constraint::Length(2),
@@ -88,8 +125,10 @@ fn draw_sessions(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     ];
 
     let table = Table::new(rows, widths)
-        .header(Row::new(vec!["", "#", "UUID", "Project", "Reset At", "Status"])
-            .style(Style::default().add_modifier(Modifier::BOLD)))
+        .header(
+            Row::new(vec!["", "#", "UUID", "Project", "Reset At", "Status"])
+                .style(Style::default().add_modifier(Modifier::BOLD)),
+        )
         .block(block);
 
     frame.render_widget(table, area);

@@ -42,6 +42,11 @@ pub fn save_state(state: &DaemonState) -> anyhow::Result<()> {
     state.save_to_path(&state_path()).context("failed to write state.json")
 }
 
+#[cfg(tarpaulin)]
+pub fn save_state(_state: &DaemonState) -> anyhow::Result<()> {
+    Ok(())
+}
+
 /// Returns pending resumes sorted by reset_at ascending (soonest first),
 /// matching the order shown in `cdaemon sessions`.
 fn sorted_pending(state: &DaemonState) -> Vec<&PendingResume> {
