@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -53,8 +53,8 @@ pub async fn run() -> anyhow::Result<()> {
 
     for jsonl in discover_active_jsonls(&claude_dir) {
         if jsonl.exists() {
-            watcher.watch(&jsonl, RecursiveMode::NonRecursive)?;
-            info!(path = ?jsonl, "watching active session JSONL");
+            let _ = watcher.watch(&jsonl, RecursiveMode::NonRecursive);
+            info!(path = ?jsonl, "watching discovered session JSONL");
             // Scan existing lines for rate limits that happened while we were offline
             handle_change(
                 jsonl,
@@ -209,26 +209,54 @@ pub async fn read_new_lines(path: &PathBuf, offsets: Arc<Mutex<HashMap<PathBuf, 
 }
 
 pub fn discover_active_jsonls(claude_dir: &std::path::Path) -> Vec<PathBuf> {
-    let sessions_dir = claude_dir.join("sessions");
-    let mut paths = vec![];
+    let mut paths = HashSet::new();
 
-    let Ok(entries) = std::fs::read_dir(&sessions_dir) else {
-        return paths;
-    };
-    for entry in entries.flatten() {
-        let p = entry.path();
-        if p.extension().is_some_and(|e| e == "json") {
-            if let Ok(content) = std::fs::read_to_string(&p) {
-                if let Ok(session) = serde_json::from_str::<SessionEntry>(&content) {
-                    let jsonl = crate::session::jsonl_path(&session);
-                    if jsonl.exists() {
-                        paths.push(jsonl);
+    // 1. Current PID-based active sessions
+    let sessions_dir = claude_dir.join("sessions");
+    if let Ok(entries) = std::fs::read_dir(&sessions_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().is_some_and(|e| e == "json") {
+                if let Ok(content) = std::fs::read_to_string(&p) {
+                    if let Ok(session) = serde_json::from_str::<SessionEntry>(&content) {
+                        let jsonl = crate::session::jsonl_path(&session);
+                        if jsonl.exists() {
+                            paths.insert(jsonl);
+                        }
                     }
                 }
             }
         }
     }
-    paths
+
+    // 2. Recently modified JSONLs (last 24h) to catch missed rate-limit events
+    let projects_dir = claude_dir.join("projects");
+    if let Ok(project_entries) = std::fs::read_dir(&projects_dir) {
+        let now = std::time::SystemTime::now();
+        let max_age = std::time::Duration::from_secs(24 * 3600);
+
+        for project_entry in project_entries.flatten() {
+            if !project_entry.path().is_dir() {
+                continue;
+            }
+            if let Ok(session_entries) = std::fs::read_dir(project_entry.path()) {
+                for session_entry in session_entries.flatten() {
+                    let p = session_entry.path();
+                    if p.extension().is_some_and(|e| e == "jsonl") {
+                        if let Ok(metadata) = p.metadata() {
+                            if let Ok(modified) = metadata.modified() {
+                                if now.duration_since(modified).unwrap_or(max_age) < max_age {
+                                    paths.insert(p);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    paths.into_iter().collect()
 }
 
 #[cfg(not(tarpaulin))]
@@ -488,6 +516,22 @@ mod tests {
     }
 
     // ── discover_active_jsonls with existing JSONL ────────────────────────────
+
+    #[test]
+    fn discover_active_jsonls_finds_recent_jsonl_without_session_json() {
+        let dir = tempdir().unwrap();
+        let claude_dir = dir.path().join(".claude");
+        let projects_dir = claude_dir.join("projects").join("test-project");
+        std::fs::create_dir_all(&projects_dir).unwrap();
+
+        let jsonl_path = projects_dir.join("recent.jsonl");
+        std::fs::write(&jsonl_path, "some content").unwrap();
+
+        // The file should be found because it's new (last 24h)
+        let result = discover_active_jsonls(&claude_dir);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].file_name().unwrap(), "recent.jsonl");
+    }
 
     #[test]
     fn discover_active_jsonls_finds_existing_jsonl() {
