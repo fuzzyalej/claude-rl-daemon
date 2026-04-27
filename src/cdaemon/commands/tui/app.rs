@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -19,6 +19,25 @@ pub enum Dialog {
     Reschedule { uuid: String, input: String },
     DoctorOutput { lines: Vec<String> },
     LogsFullscreen,
+}
+
+fn load_session_kinds(claude_dir: &Path) -> HashMap<String, String> {
+    let sessions_dir = claude_dir.join("sessions");
+    let mut map = HashMap::new();
+    let Ok(entries) = std::fs::read_dir(&sessions_dir) else {
+        return map;
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.extension().is_some_and(|e| e == "json") {
+            if let Ok(content) = std::fs::read_to_string(&p) {
+                if let Ok(session) = serde_json::from_str::<claude_rl_daemon::session::SessionEntry>(&content) {
+                    map.insert(session.session_id, session.kind);
+                }
+            }
+        }
+    }
+    map
 }
 
 pub struct App {
@@ -55,10 +74,14 @@ impl App {
     pub fn reload(&mut self) {
         let claude_dir = dirs::home_dir().expect("home dir").join(".claude");
         let active_jsonls = claude_rl_daemon::watcher::discover_active_jsonls(&claude_dir);
+        let session_kinds = load_session_kinds(&claude_dir);
         self.active_sessions = active_jsonls
             .into_iter()
             .filter_map(|p| {
                 let id = p.file_stem()?.to_str()?.to_string();
+                if session_kinds.get(&id).map(|k| k == "subagent").unwrap_or(false) {
+                    return None;
+                }
                 Some((id, p))
             })
             .collect();
@@ -316,5 +339,43 @@ mod tests {
         assert_eq!(app.selected_uuid(), Some("pending1".to_string()));
         app.selected = 3;
         assert_eq!(app.selected_uuid(), None);
+    }
+
+    #[test]
+    fn load_session_kinds_filters_subagents() {
+        let dir = tempfile::tempdir().unwrap();
+        let claude_dir = dir.path().join(".claude");
+        let sessions_dir = claude_dir.join("sessions");
+        std::fs::create_dir_all(&sessions_dir).unwrap();
+
+        let write_session = |filename: &str, session_id: &str, kind: &str| {
+            let json = format!(
+                r#"{{"pid":1,"sessionId":"{session_id}","cwd":"/tmp","startedAt":0,"version":"1","kind":"{kind}","entrypoint":"cli"}}"#
+            );
+            std::fs::write(sessions_dir.join(filename), json).unwrap();
+        };
+
+        write_session("1.json", "interactive-session", "interactive");
+        write_session("2.json", "subagent-session", "subagent");
+
+        let kinds = load_session_kinds(&claude_dir);
+        assert_eq!(kinds.get("interactive-session").map(|s| s.as_str()), Some("interactive"));
+        assert_eq!(kinds.get("subagent-session").map(|s| s.as_str()), Some("subagent"));
+
+        // Simulate what reload() does
+        let sessions = vec![
+            ("interactive-session".to_string(), PathBuf::from("a.jsonl")),
+            ("subagent-session".to_string(), PathBuf::from("b.jsonl")),
+            ("unknown-session".to_string(), PathBuf::from("c.jsonl")),
+        ];
+        let filtered: Vec<_> = sessions
+            .into_iter()
+            .filter(|(id, _)| !kinds.get(id).map(|k| k == "subagent").unwrap_or(false))
+            .collect();
+
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|(id, _)| id == "interactive-session"));
+        assert!(filtered.iter().any(|(id, _)| id == "unknown-session"));
+        assert!(!filtered.iter().any(|(id, _)| id == "subagent-session"));
     }
 }
