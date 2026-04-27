@@ -15,16 +15,18 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),
+            Constraint::Percentage(35),
+            Constraint::Percentage(35),
             Constraint::Min(8),
-            Constraint::Length(10),
             Constraint::Length(1),
         ])
         .split(area);
 
     draw_status_bar(frame, app, chunks[0]);
     draw_sessions(frame, app, chunks[1]);
-    draw_logs(frame, app, chunks[2]);
-    draw_keybinds(frame, chunks[3]);
+    draw_messages(frame, app, chunks[2]);
+    draw_logs(frame, app, chunks[3]);
+    draw_keybinds(frame, chunks[4]);
 
     if app.dialog.is_some() {
         super::dialogs::draw_dialog(frame, app);
@@ -58,7 +60,7 @@ fn draw_sessions(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let mut rows: Vec<Row> = Vec::new();
 
     // 1. Active sessions
-    for (i, session_id) in app.active_sessions.iter().enumerate() {
+    for (i, (session_id, _path)) in app.active_sessions.iter().enumerate() {
         let cursor = if i == app.selected { "▶" } else { " " };
         let uuid_short = &session_id[..8.min(session_id.len())];
 
@@ -132,6 +134,22 @@ fn draw_sessions(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .block(block);
 
     frame.render_widget(table, area);
+}
+
+fn draw_messages(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let block = Block::default().title(" SESSION MESSAGES ").borders(Borders::ALL);
+    let lines: Vec<Line> = app
+        .session_messages
+        .iter()
+        .rev()
+        .take(area.height.saturating_sub(2) as usize)
+        .rev()
+        .map(|l| Line::from(l.as_str()))
+        .collect();
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(ratatui::widgets::Wrap { trim: false });
+    frame.render_widget(paragraph, area);
 }
 
 fn draw_logs(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {

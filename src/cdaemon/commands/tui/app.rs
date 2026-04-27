@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use claude_rl_daemon::DaemonState;
@@ -23,7 +23,8 @@ pub enum Dialog {
 
 pub struct App {
     pub daemon_state: DaemonState,
-    pub active_sessions: Vec<String>,
+    pub active_sessions: Vec<(String, PathBuf)>,
+    pub session_messages: Vec<String>,
     pub logs: VecDeque<String>,
     pub selected: usize,
     pub session_count: usize,
@@ -39,6 +40,7 @@ impl App {
         Self {
             daemon_state: DaemonState::default(),
             active_sessions: Vec::new(),
+            session_messages: Vec::new(),
             logs: VecDeque::with_capacity(200),
             selected: 0,
             session_count: 0,
@@ -55,13 +57,16 @@ impl App {
         let active_jsonls = claude_rl_daemon::watcher::discover_active_jsonls(&claude_dir);
         self.active_sessions = active_jsonls
             .into_iter()
-            .filter_map(|p| p.file_stem().and_then(|s| s.to_str()).map(String::from))
+            .filter_map(|p| {
+                let id = p.file_stem()?.to_str()?.to_string();
+                Some((id, p))
+            })
             .collect();
 
         match state::load_state() {
             Ok(s) => {
                 // Filter active sessions to exclude those that are already pending
-                self.active_sessions.retain(|id| !s.pending.contains_key(id));
+                self.active_sessions.retain(|(id, _)| !s.pending.contains_key(id));
 
                 self.session_count = s.pending.len() + self.active_sessions.len();
                 if self.session_count > 0 && self.selected >= self.session_count {
@@ -76,6 +81,7 @@ impl App {
         }
         self.load_logs();
         self.reload_daemon_status();
+        self.load_session_messages();
         self.last_refresh = Instant::now();
     }
 
@@ -84,6 +90,7 @@ impl App {
             return;
         }
         self.selected = (self.selected + 1) % self.session_count;
+        self.load_session_messages();
     }
 
     pub fn move_up(&mut self) {
@@ -91,6 +98,7 @@ impl App {
             return;
         }
         self.selected = self.selected.checked_sub(1).unwrap_or(self.session_count - 1);
+        self.load_session_messages();
     }
 
     pub fn toggle_focus(&mut self) {
@@ -129,13 +137,61 @@ impl App {
 
     pub fn selected_uuid(&self) -> Option<String> {
         if self.selected < self.active_sessions.len() {
-            return Some(self.active_sessions[self.selected].clone());
+            return Some(self.active_sessions[self.selected].0.clone());
         }
 
         let pending_idx = self.selected - self.active_sessions.len();
         let mut pending: Vec<_> = self.daemon_state.pending.values().collect();
         pending.sort_by_key(|r| r.reset_at);
         pending.get(pending_idx).map(|r| r.session_id.clone())
+    }
+
+    pub fn load_session_messages(&mut self) {
+        self.session_messages.clear();
+        let path = match self.selected_jsonl_path() {
+            Some(p) => p,
+            None => return,
+        };
+
+        if let Ok(content) = std::fs::read_to_string(path) {
+            for line in content.lines().rev().take(50).collect::<Vec<_>>().into_iter().rev() {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                    let role = val["type"].as_str().or_else(|| val["message"]["role"].as_str());
+                    let content = if let Some(c) = val["message"]["content"].as_str() {
+                        Some(c.to_string())
+                    } else if let Some(arr) = val["message"]["content"].as_array() {
+                        let text: Vec<_> = arr.iter()
+                            .filter_map(|b| b["text"].as_str())
+                            .collect();
+                        if text.is_empty() { None } else { Some(text.join("\n")) }
+                    } else {
+                        None
+                    };
+
+                    if let (Some(r), Some(c)) = (role, content) {
+                        if r == "user" || r == "assistant" {
+                            let label = if r == "user" { "[User]" } else { "[Assistant]" };
+                            self.session_messages.push(format!("{} {}", label, c));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn selected_jsonl_path(&self) -> Option<PathBuf> {
+        if self.selected < self.active_sessions.len() {
+            return Some(self.active_sessions[self.selected].1.clone());
+        }
+
+        let pending_idx = self.selected - self.active_sessions.len();
+        let mut pending: Vec<_> = self.daemon_state.pending.values().collect();
+        pending.sort_by_key(|r| r.reset_at);
+        let r = pending.get(pending_idx)?;
+
+        let cwd = r.cwd.as_ref()?;
+        let project_key = claude_rl_daemon::session::cwd_to_project_key(cwd);
+        Some(dirs::home_dir()?.join(".claude").join("projects").join(project_key).join(format!("{}.jsonl", r.session_id)))
     }
 }
 
@@ -208,7 +264,10 @@ mod tests {
     #[test]
     fn selected_uuid_returns_active_or_pending() {
         let mut app = make_app();
-        app.active_sessions = vec!["active1".to_string(), "active2".to_string()];
+        app.active_sessions = vec![
+            ("active1".to_string(), PathBuf::from("p1")),
+            ("active2".to_string(), PathBuf::from("p2")),
+        ];
         app.daemon_state.pending.insert("pending1".to_string(), claude_rl_daemon::PendingResume {
             session_id: "pending1".to_string(),
             reset_at: chrono::Utc::now(),
