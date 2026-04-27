@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.5] — 2026-04-27
+
+### Added
+- **Batch Cancel**: `cdaemon cancel` now supports multiple UUIDs/indexes and the `all` keyword to clear everything at once.
+- **Improved Session Discovery**: The daemon now scans `~/.claude/projects/` for recently modified JSONLs (last 24h) to catch rate-limited sessions that might have been missed if the process exited or the daemon was restarted.
+
+### Changed
+- Bumped version to 0.2.5.
+
+---
+
 ## [0.2.4] — 2026-04-26
 
 ### Fixed

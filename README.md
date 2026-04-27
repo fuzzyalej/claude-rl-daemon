@@ -61,7 +61,7 @@ The TUI shows:
 | `cdaemon hook <uuid>` | Attach to a session's tmux window |
 | `cdaemon resume <uuid>` | Manually trigger a resume now |
 | `cdaemon reschedule <uuid> <time>` | Reschedule a pending resume (ISO8601 or relative, e.g. "+2h", "in 10m") |
-| `cdaemon cancel <uuid>` | Cancel a pending resume |
+| `cdaemon cancel <uuid>...` | Cancel pending resume(s) (supports multiple UUIDs or 'all') |
 | `cdaemon doctor` | Check all prerequisites |
 | `cdaemon install` | Build + install daemon + configure launchd |
 | `cdaemon start` / `cdaemon stop` | Start or stop the daemon |

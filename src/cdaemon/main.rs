@@ -53,10 +53,11 @@ enum Cmd {
         /// New resume time (ISO8601 or relative, e.g. "+2h", "in 10m")
         time: String,
     },
-    /// Cancel a pending session resume
+    /// Cancel pending session resumes
     Cancel {
-        /// Session UUID or 8-char prefix
-        uuid: String,
+        /// Session UUID(s), 8-char prefix(es), or 'all' to clear everything
+        #[arg(num_args = 1..)]
+        uuids: Vec<String>,
     },
     /// Check all prerequisites
     Doctor,
@@ -85,7 +86,7 @@ fn main() -> Result<()> {
         Some(Cmd::Hook { uuid }) => commands::hook::run(&uuid),
         Some(Cmd::Resume { uuid }) => commands::resume::run(&uuid),
         Some(Cmd::Reschedule { uuid, time }) => commands::reschedule::run(&uuid, &time),
-        Some(Cmd::Cancel { uuid }) => commands::cancel::run(&uuid),
+        Some(Cmd::Cancel { uuids }) => commands::cancel::run(&uuids),
         Some(Cmd::Doctor) => commands::doctor::run(),
         Some(Cmd::Completions { shell }) => commands::completions::run(shell),
     }
