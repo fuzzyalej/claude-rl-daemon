@@ -66,7 +66,11 @@ pub fn handle_key(
         }
         KeyCode::Char('h') => {
             if let Some(uuid) = app.selected_uuid() {
-                attach_tmux(app, terminal, &uuid)?;
+                if app.selected < app.active_sessions.len() {
+                    app.error = Some("Session is active in your terminal, not managed by daemon tmux.".to_string());
+                } else {
+                    attach_tmux(app, terminal, &uuid)?;
+                }
             }
         }
         _ => {}
@@ -167,17 +171,41 @@ fn attach_tmux(
     let tmux_name = tmux_session_name(uuid);
     let tmux_bin = find_tmux_binary();
 
+    // Check if session exists first
+    let check = std::process::Command::new(&tmux_bin)
+        .args(["has-session", "-t", &tmux_name])
+        .output();
+
+    match check {
+        Ok(out) if !out.status.success() => {
+            app.error = Some(format!("tmux session '{tmux_name}' not found. It may have exited or not been resumed yet."));
+            return Ok(());
+        }
+        Err(_) => {
+            app.error = Some("tmux binary not found. Please install tmux.".to_string());
+            return Ok(());
+        }
+        _ => {}
+    }
+
     disable_raw_mode()?;
     execute!(io::stdout(), LeaveAlternateScreen)?;
 
-    std::process::Command::new(&tmux_bin)
+    let status = std::process::Command::new(&tmux_bin)
         .args(["attach", "-t", &tmux_name])
-        .status()
-        .ok();
+        .status();
 
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen)?;
     terminal.clear()?;
+
+    if let Ok(s) = status {
+        if !s.success() {
+            app.error = Some(format!("tmux attach failed with status {s}"));
+        }
+    } else if let Err(e) = status {
+        app.error = Some(format!("Failed to run tmux attach: {e}"));
+    }
 
     app.reload();
     Ok(())

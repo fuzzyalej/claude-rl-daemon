@@ -65,10 +65,10 @@ impl App {
 
         match state::load_state() {
             Ok(s) => {
-                // Filter active sessions to exclude those that are already pending
-                self.active_sessions.retain(|(id, _)| !s.pending.contains_key(id));
+                // Filter active sessions to exclude those that are already pending or completed
+                self.active_sessions.retain(|(id, _)| !s.pending.contains_key(id) && !s.completed.contains(id));
 
-                self.session_count = s.pending.len() + self.active_sessions.len();
+                self.session_count = self.active_sessions.len() + s.pending.len() + s.completed.len();
                 if self.session_count > 0 && self.selected >= self.session_count {
                     self.selected = self.session_count - 1;
                 }
@@ -140,10 +140,20 @@ impl App {
             return Some(self.active_sessions[self.selected].0.clone());
         }
 
-        let pending_idx = self.selected - self.active_sessions.len();
+        let mut idx = self.selected - self.active_sessions.len();
+
+        // Pending
         let mut pending: Vec<_> = self.daemon_state.pending.values().collect();
         pending.sort_by_key(|r| r.reset_at);
-        pending.get(pending_idx).map(|r| r.session_id.clone())
+        if idx < pending.len() {
+            return Some(pending[idx].session_id.clone());
+        }
+        idx -= pending.len();
+
+        // Completed
+        let mut completed: Vec<_> = self.daemon_state.completed.iter().collect();
+        completed.sort();
+        completed.get(idx).map(|s| s.to_string())
     }
 
     pub fn load_session_messages(&mut self) {
@@ -184,14 +194,38 @@ impl App {
             return Some(self.active_sessions[self.selected].1.clone());
         }
 
-        let pending_idx = self.selected - self.active_sessions.len();
+        let mut idx = self.selected - self.active_sessions.len();
+
+        // Pending
         let mut pending: Vec<_> = self.daemon_state.pending.values().collect();
         pending.sort_by_key(|r| r.reset_at);
-        let r = pending.get(pending_idx)?;
+        if idx < pending.len() {
+            let r = pending[idx];
+            let cwd = r.cwd.as_ref()?;
+            let project_key = claude_rl_daemon::session::cwd_to_project_key(cwd);
+            return Some(dirs::home_dir()?.join(".claude").join("projects").join(project_key).join(format!("{}.jsonl", r.session_id)));
+        }
+        idx -= pending.len();
 
-        let cwd = r.cwd.as_ref()?;
-        let project_key = claude_rl_daemon::session::cwd_to_project_key(cwd);
-        Some(dirs::home_dir()?.join(".claude").join("projects").join(project_key).join(format!("{}.jsonl", r.session_id)))
+        // Completed
+        let mut completed: Vec<_> = self.daemon_state.completed.iter().collect();
+        completed.sort();
+        let session_id = completed.get(idx)?;
+
+        // Search for the JSONL
+        let claude_dir = dirs::home_dir()?.join(".claude");
+        let projects_dir = claude_dir.join("projects");
+        if let Ok(project_entries) = std::fs::read_dir(projects_dir) {
+            for project_entry in project_entries.flatten() {
+                if project_entry.path().is_dir() {
+                    let jsonl = project_entry.path().join(format!("{session_id}.jsonl"));
+                    if jsonl.exists() {
+                        return Some(jsonl);
+                    }
+                }
+            }
+        }
+        None
     }
 }
 

@@ -50,16 +50,19 @@ pub fn print_sessions(daemon_state: &DaemonState, active_jsonls: &[std::path::Pa
     // 2. Pending sessions
     let pending: Vec<claude_rl_daemon::PendingResume> =
         daemon_state.pending.values().cloned().collect();
-    for (i, resume) in format::sorted_pending(&pending).iter().enumerate() {
+    let sorted_p = format::sorted_pending(&pending);
+    for (i, resume) in sorted_p.iter().enumerate() {
         let r = format::session_row(resume, "pending", i + 1);
         rows.push(SessionRow { index: r.index, uuid: r.uuid, status: r.status, reset_at: r.reset_at, cwd: r.cwd });
     }
 
     // 3. Completed sessions
-    for id in &daemon_state.completed {
+    let mut completed: Vec<_> = daemon_state.completed.iter().collect();
+    completed.sort();
+    for (i, id) in completed.iter().enumerate() {
         rows.push(SessionRow {
-            index: "—".to_string(),
-            uuid: id.clone(),
+            index: (i + 1 + sorted_p.len()).to_string(),
+            uuid: id.to_string(),
             status: format::color_status("resumed"),
             reset_at: "—".to_string(),
             cwd: "—".to_string(),

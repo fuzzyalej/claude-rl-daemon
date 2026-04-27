@@ -58,27 +58,46 @@ fn sorted_pending(state: &DaemonState) -> Vec<&PendingResume> {
 /// Resolve a 1-based index, full UUID, or 8-char prefix to a full session ID.
 /// Index must match the row number shown by `cdaemon sessions`.
 pub fn resolve_uuid(state: &DaemonState, prefix_or_full: &str) -> anyhow::Result<String> {
-    // Numeric index (1-based)
+    // 1. Check numeric index (1-based)
     if let Ok(n) = prefix_or_full.parse::<usize>() {
         let sorted = sorted_pending(state);
-        return sorted
-            .get(n.saturating_sub(1))
-            .map(|r| r.session_id.clone())
-            .ok_or_else(|| anyhow::anyhow!("no session at index {n} (only {} pending)", sorted.len()));
+        if n > 0 && n <= sorted.len() {
+            return Ok(sorted[n - 1].session_id.clone());
+        }
+        
+        // Check completed sessions
+        let mut completed: Vec<_> = state.completed.iter().collect();
+        completed.sort();
+        let completed_idx = n.saturating_sub(sorted.len()).saturating_sub(1);
+        if completed_idx < completed.len() {
+            return Ok(completed[completed_idx].clone());
+        }
+
+        anyhow::bail!("no session at index {n} ({} pending, {} resumed)", sorted.len(), completed.len());
     }
 
-    if state.pending.contains_key(prefix_or_full) {
+    // 2. Check full UUID in pending or completed
+    if state.pending.contains_key(prefix_or_full) || state.completed.contains(prefix_or_full) {
         return Ok(prefix_or_full.to_string());
     }
-    let matches: Vec<&str> = state
+
+    // 3. Check prefix in pending or completed
+    let mut matches: Vec<String> = state
         .pending
         .keys()
         .filter(|k| k.starts_with(prefix_or_full))
-        .map(|s| s.as_str())
+        .cloned()
         .collect();
+    
+    for id in &state.completed {
+        if id.starts_with(prefix_or_full) && !matches.contains(id) {
+            matches.push(id.clone());
+        }
+    }
+
     match matches.len() {
         0 => anyhow::bail!("no session found matching '{prefix_or_full}'"),
-        1 => Ok(matches[0].to_string()),
+        1 => Ok(matches[0].clone()),
         _ => anyhow::bail!(
             "ambiguous prefix '{}' matches {} sessions; use more characters",
             prefix_or_full,
@@ -130,10 +149,28 @@ mod tests {
     }
 
     #[test]
-    fn resolve_missing_errors() {
-        let s = DaemonState::default();
-        let err = resolve_uuid(&s, "notfound").unwrap_err();
-        assert!(err.to_string().contains("no session found"));
+    fn resolve_completed_uuid() {
+        let id = "completed-uuid";
+        let mut s = DaemonState::default();
+        s.completed.insert(id.to_string());
+        assert_eq!(resolve_uuid(&s, id).unwrap(), id);
+        assert_eq!(resolve_uuid(&s, "compl").unwrap(), id);
+    }
+
+    #[test]
+    fn resolve_index_across_pending_and_completed() {
+        let mut s = DaemonState::default();
+        let pending = "pending-uuid";
+        let completed = "completed-uuid";
+        s.pending.insert(pending.to_string(), PendingResume {
+            session_id: pending.to_string(),
+            reset_at: Utc::now(),
+            cwd: None,
+        });
+        s.completed.insert(completed.to_string());
+        
+        assert_eq!(resolve_uuid(&s, "1").unwrap(), pending);
+        assert_eq!(resolve_uuid(&s, "2").unwrap(), completed);
     }
 
     #[test]

@@ -40,8 +40,17 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     } else {
         Span::styled("○ stopped", Style::default().fg(Color::Red))
     };
-    let updated = format!("  Updated: {}s ago  [r] refresh  [q] quit", elapsed);
-    let line = Line::from(vec![daemon_label, Span::raw(updated)]);
+    
+    let mut spans = vec![
+        daemon_label,
+        Span::raw(format!("  Updated: {}s ago  [r] refresh  [q] quit", elapsed)),
+    ];
+
+    if let Some(err) = &app.error {
+        spans.push(Span::styled(format!("  ERROR: {}", err), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)));
+    }
+
+    let line = Line::from(spans);
     frame.render_widget(Paragraph::new(line), area);
 }
 
@@ -51,9 +60,10 @@ fn draw_sessions(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
     let block = Block::default()
         .title(format!(
-            " SESSIONS ({} active, {} pending) ",
+            " SESSIONS ({} active, {} pending, {} resumed) ",
             app.active_sessions.len(),
-            app.daemon_state.pending.len()
+            app.daemon_state.pending.len(),
+            app.daemon_state.completed.len()
         ))
         .borders(Borders::ALL);
 
@@ -112,6 +122,33 @@ fn draw_sessions(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 cwd,
                 reset,
                 "pending".to_string(),
+            ])
+            .style(style),
+        );
+    }
+
+    // 3. Completed sessions
+    let mut completed: Vec<_> = app.daemon_state.completed.iter().collect();
+    completed.sort();
+    for (i, id) in completed.iter().enumerate() {
+        let idx = i + app.active_sessions.len() + app.daemon_state.pending.len();
+        let cursor = if idx == app.selected { "▶" } else { " " };
+        let uuid_short = &id[..8.min(id.len())];
+
+        let style = if idx == app.selected {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        rows.push(
+            Row::new(vec![
+                cursor.to_string(),
+                format!("{}", i + 1 + app.daemon_state.pending.len()),
+                uuid_short.to_string(),
+                "—".to_string(),
+                "—".to_string(),
+                "resumed".to_string(),
             ])
             .style(style),
         );
